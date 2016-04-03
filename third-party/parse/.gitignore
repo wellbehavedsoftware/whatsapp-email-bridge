@@ -1,0 +1,12 @@
+*.pyc
+*.pyo
+
+.cache/
+.idea/
+.tox/
+__pycache__/
+
+MANIFEST
+build
+dist
+.ropeproject
