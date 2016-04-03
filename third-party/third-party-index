@@ -1,0 +1,60 @@
+---
+
+gitdb:
+
+  url: "git@github.com:gitpython-developers/gitdb.git"
+  version: "master"
+  python: "gitdb"
+  build: "python setup.py build"
+
+gitpython:
+
+  url: "git@github.com:gitpython-developers/GitPython.git"
+  version: "master"
+  python: "gitpython"
+
+parse:
+
+  url: "git@github.com:r1chardj0n3s/parse.git"
+  version: "master"
+  python: "parse"
+
+protobuf:
+
+  url: "git@github.com:google/protobuf.git"
+  version: "master"
+  python: "protobuf/python"
+
+python-axolotl:
+
+  url: "git@github.com:tgalal/python-axolotl.git"
+  version: "master"
+  python: "python-axolotl"
+  build: "python setup.py build"
+
+python-axolotl-curve25519:
+
+  url: "git@github.com:tgalal/python-axolotl-curve25519.git"
+  version: "master"
+  python: "python-axolotl-curve25519/build/lib.linux-x86_64-2.7"
+  build: "python setup.py build"
+
+smmap:
+
+  url: "git@github.com:gitpython-developers/smmap.git"
+  version: "master"
+  python: "smmap"
+
+wbs-python:
+
+  url: "git@gitlab.wellbehavedsoftware.com:well-behaved-software/wbs-python.git"
+  version: "master"
+  python: "wbs-python"
+
+yowsup:
+
+  url: "git@github.com:tgalal/yowsup.git"
+  version: "master"
+  python: "yowsup"
+
+# ex: et ts=2 filetype=yaml

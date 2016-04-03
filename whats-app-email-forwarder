@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
+import os
+import sys
+
+HOME = (
+	os.path.dirname (
+		os.path.abspath (
+			__name__)))
+
+sys.path.append (
+	"%s/third-party/pyyaml/lib" % (
+		HOME))
+
+import yaml
+
+with open ("%s/third-party/third-party-index" % HOME) as file_handle:
+
+	third_party_index = (
+		yaml.load (
+			file_handle))
+
+for third_party_name, third_party_data \
+in third_party_index.items ():
+
+	if not "python" in third_party_data:
+		continue
+
+	if third_party_name == "pyyaml":
+		continue
+
+	sys.path.append (
+		"%s/third-party/%s" % (
+			HOME,
+			third_party_data ["python"]))
+
+import WhatsAppEmailForwarder as waforward
+
+class Args (object):
+	pass
+
+waforward.args = Args ()
+waforward.args.debug = False
+waforward.args.dry = False
+
+waforward.config = (
+	waforward.loadConfig (
+		"config.yaml"))
+
+print (
+	"== Starting")
+
+whatsapp_config = (
+	waforward.config ["whatsapp"])
+
+stack = (
+	waforward.YowsupMyStack (
+		(
+			whatsapp_config.get ("phone"),
+			whatsapp_config.get ("password"))))
+
+print (
+	"== Connecting")
+
+try:
+
+    stack.start ()
+
+except KeyboardInterrupt:
+
+    print (
+    	"== Terminated by user")
+
+# ex: noet ts=4 filetype=yaml
