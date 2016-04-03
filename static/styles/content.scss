@@ -1,0 +1,153 @@
+@import "colours.scss";
+
+.content {
+	left: 16rem;
+	right: 0px;
+	height: 100%;
+	margin-left: 256px;
+	padding-left: 16px;
+	padding-right: 16px;
+	background-color: white;
+}
+
+.content h1 {
+	font-family: montserrat, sans-serif;
+	font-weight: bold;
+	font-size: 120%;
+	font-variant: small-caps;
+	color: $heading-text;
+	margin-top: 1rem;
+	margin-bottom: 1rem;
+	padding-bottom: 0.2rem;
+	border-bottom: 0.2rem solid $heading-text;
+}
+
+.content h2 {
+	font-family: montserrat, sans-serif;
+	font-weight: bold;
+	font-size: 100%;
+	font-variant: small-caps;
+	color: $heading-text;
+	padding-bottom: 0.2rem;
+	border-bottom: 0.1rem solid $heading-text;
+}
+
+.content h3 {
+	font-family: montserrat, sans-serif;
+	font-weight: bold;
+	font-size: 100%;
+	font-variant: small-caps;
+	color: $heading-text;
+}
+
+.content table {
+	background: $table-background;
+	border-spacing: 0;
+}
+
+.content table > thead > tr {
+	background: white;
+}
+
+.content table > thead > tr > th {
+	padding: 0.2rem 0.6rem;
+}
+
+.content table > tbody > tr > td,
+.content table > tbody > tr > th {
+	padding-bottom: 0.2rem;
+	padding-left: 0.6rem;
+	padding-right: 0.6rem;
+}
+
+.content table > tbody > tr:first-child > td {
+	border-top: 0.1px solid $table-border;
+}
+
+.content table > tbody > tr:last-child > td {
+	border-bottom: 0.1px solid $table-border;
+}
+
+.content table th {
+	font-family: montserrat, sans-serif;
+	font-weight: normal;
+	color: $heading-text;
+	text-align: left;
+}
+
+.content table th.right {
+	text-align: right;
+}
+
+.content table td.right {
+	text-align: right;
+}
+
+.content table tr.section td {
+	color: $heading-text;
+	background: $white;
+	padding-left: 0.6rem;
+	text-align: center;
+	border-top: 0.1px solid $table-border;
+	border-bottom: 0.1px solid $table-border;
+	font-style: italic;
+}
+
+.content table tr.total td {
+	color: $heading-text;
+	background: $white;
+	padding-left: 0.6rem;
+	text-align: left;
+	border-top: 0.1px solid $table-border;
+	border-bottom: 0.1px solid $table-border;
+	font-family: montserrat, sans-serif;
+	font-weight: normal;
+}
+
+.content table tr.total td.right {
+	text-align: right;
+}
+
+.content a {
+	text-decoration: none;
+	color: inherit;
+}
+
+.content a:hover {
+	text-decoration: underline;
+	color: $heading-text;
+}
+
+.content em {
+	font-style: italic;
+}
+
+.content strong {
+	font-family: montserrat, sans-serif;
+	color: #261313;
+}
+
+.content ul {
+	padding-left: 1.5rem;
+}
+
+.content code {
+	font-family: sourcecodepro, monospace;
+	font-size: 90%;
+}
+
+.content label {
+	font-weight: bold;
+}
+
+.content input[type=text],
+.content input[type=email],
+.content input[type=password] {
+	font-family: inherit;
+	padding: 0.2rem 0.6rem;
+}
+
+.content input[type=submit] {
+	font-family: montserrat, sans-serif;
+	padding: 0.3rem 0.8rem;
+}

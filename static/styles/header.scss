@@ -1,0 +1,57 @@
+@import "colours.scss";
+
+header {
+
+	height: 64px;
+	background-color: $header-background;
+	position: relative;
+
+	.logo {
+
+		position: absolute;
+		top: 8px;
+		left: 16px;
+
+		img {
+			width: 64px;
+			height: 48px;
+		}
+
+	}
+
+	h1 {
+		color: $header-text;
+		font-family: montserrat, sans-serif;
+		font-weight: normal;
+		margin: 0;
+		padding: 0;
+		position: absolute;
+		top: 8px;
+		left: 96px;
+		line-height: 48px;
+		font-size: 32px;
+	}
+
+	.login {
+
+		position: absolute;
+		top: 8px;
+		right: 8px;
+
+		font-weight: bold;
+		color: white;
+		
+		.logged-in-as,
+		.not-logged-in {
+			margin-right: 1rem;
+		}
+
+		a.log-in,
+		a.log-out {
+			background: alpha (white, 0.5);
+			padding: 3px 8px;
+		}
+
+	}
+
+}

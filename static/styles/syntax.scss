@@ -1,0 +1,17 @@
+@import "colours.scss";
+
+.codehilite {
+	margin-top: 1rem;
+	margin-bottom: 1rem;
+}
+
+.codehilite pre {
+	display: inline-block;
+	margin: 0;
+	padding: 0.3rem 0.6rem;
+	border-top: 0.1px solid #f5ebeb;
+	border-bottom: 0.1px solid #f5ebeb;
+	background: #fcf7f7;
+	font-family: sourcecodepro, monospace;
+	font-size: 90%;
+}
