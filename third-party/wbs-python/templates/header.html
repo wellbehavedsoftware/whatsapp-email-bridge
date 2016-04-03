@@ -1,0 +1,37 @@
+<span class="logo">
+	<a href="{{
+		url_for ('root')
+	}}">
+		<img src="{{
+			url_for (
+				'static',
+				filename = 'images/wbs/wbs-logo-64x48.png')
+		}}">
+	</a>
+</span>
+
+<h1>
+	{{ g.project.title }}
+</h1>
+
+<div class="login">
+{% if g.user_email %}
+	<span class="logged-in-as">
+		Logged in as {{ g.user_email }}
+	</span>
+	{% if g.logout_url %}
+		<a class="log-out" href="{{ g.logout_url }}">
+			Log out
+		</a>
+	{% endif %}
+{% else %}
+	<span class="not-logged-in">
+		Not logged in
+	</span>
+	{% if g.login_url %}
+		<a class="log-in" href="{{ g.login_url }}">
+			Log in
+		</a>
+	{% endif %}
+{% endif %}
+</div>
