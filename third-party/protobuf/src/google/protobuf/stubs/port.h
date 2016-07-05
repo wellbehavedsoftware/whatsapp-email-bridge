@@ -174,6 +174,15 @@ static const uint64 kuint64max = GOOGLE_ULONGLONG(0xFFFFFFFFFFFFFFFF);
 #endif
 #endif
 
+#ifndef GOOGLE_ATTRIBUTE_NORETURN
+#ifdef __GNUC__
+// Tell the compiler that a given function never returns.
+#define GOOGLE_ATTRIBUTE_NORETURN __attribute__((noreturn))
+#else
+#define GOOGLE_ATTRIBUTE_NORETURN
+#endif
+#endif
+
 #ifndef GOOGLE_ATTRIBUTE_DEPRECATED
 #ifdef __GNUC__
 // If the method/variable/type is used anywhere, produce a warning.
@@ -276,10 +285,8 @@ inline void GOOGLE_UNALIGNED_STORE64(void *p, uint64 v) {
 #define GOOGLE_THREAD_LOCAL __thread
 #endif
 
-// The following guarantees declaration of the byte swap functions, and
-// defines __BYTE_ORDER for MSVC
+// The following guarantees declaration of the byte swap functions.
 #ifdef _MSC_VER
-#define __BYTE_ORDER __LITTLE_ENDIAN
 #define bswap_16(x) _byteswap_ushort(x)
 #define bswap_32(x) _byteswap_ulong(x)
 #define bswap_64(x) _byteswap_uint64(x)

@@ -46,10 +46,11 @@
 #include <unistd.h>
 #endif
 #include <errno.h>
+#include <fstream>
 #include <iostream>
 #include <ctype.h>
 
-#ifdef GOOGLE_PROTOBUF_ARCH_SPARC 
+#ifdef GOOGLE_PROTOBUF_ARCH_SPARC
 #include <limits.h> //For PATH_MAX
 #endif
 
@@ -640,18 +641,23 @@ CommandLineInterface::MemoryOutputStream::~MemoryOutputStream() {
       return;
     }
 
-    // Seek backwards to the beginning of the line, which is where we will
-    // insert the data.  Note that this has the effect of pushing the insertion
-    // point down, so the data is inserted before it.  This is intentional
-    // because it means that multiple insertions at the same point will end
-    // up in the expected order in the final output.
-    pos = target->find_last_of('\n', pos);
-    if (pos == string::npos) {
-      // Insertion point is on the first line.
-      pos = 0;
+    if ((pos > 3) && (target->substr(pos - 3, 2) == "/*")) {
+      // Support for inline "/* @@protoc_insertion_point() */"
+      pos = pos - 3;
     } else {
-      // Advance to character after '\n'.
-      ++pos;
+      // Seek backwards to the beginning of the line, which is where we will
+      // insert the data.  Note that this has the effect of pushing the
+      // insertion point down, so the data is inserted before it.  This is
+      // intentional because it means that multiple insertions at the same point
+      // will end up in the expected order in the final output.
+      pos = target->find_last_of('\n', pos);
+      if (pos == string::npos) {
+        // Insertion point is on the first line.
+        pos = 0;
+      } else {
+        // Advance to character after '\n'.
+        ++pos;
+      }
     }
 
     // Extract indent.
@@ -948,17 +954,23 @@ bool CommandLineInterface::MakeInputsBeProtoPathRelative(
   return true;
 }
 
+
 CommandLineInterface::ParseArgumentStatus
 CommandLineInterface::ParseArguments(int argc, const char* const argv[]) {
   executable_name_ = argv[0];
 
+  vector<string> arguments;
+  for (int i = 1; i < argc; ++i) {
+    arguments.push_back(argv[i]);
+  }
+
   // Iterate through all arguments and parse them.
-  for (int i = 1; i < argc; i++) {
+  for (int i = 0; i < arguments.size(); ++i) {
     string name, value;
 
-    if (ParseArgument(argv[i], &name, &value)) {
+    if (ParseArgument(arguments[i].c_str(), &name, &value)) {
       // Returned true => Use the next argument as the flag value.
-      if (i + 1 == argc || argv[i+1][0] == '-') {
+      if (i + 1 == arguments.size() || arguments[i + 1][0] == '-') {
         std::cerr << "Missing value for flag: " << name << std::endl;
         if (name == "--decode") {
           std::cerr << "To decode an unknown message, use --decode_raw."
@@ -967,7 +979,7 @@ CommandLineInterface::ParseArguments(int argc, const char* const argv[]) {
         return PARSE_ARGUMENT_FAIL;
       } else {
         ++i;
-        value = argv[i];
+        value = arguments[i];
       }
     }
 
@@ -1129,8 +1141,13 @@ CommandLineInterface::InterpretArgument(const string& name,
 
       // Make sure disk path exists, warn otherwise.
       if (access(disk_path.c_str(), F_OK) < 0) {
-        std::cerr << disk_path << ": warning: directory does not exist."
-                  << std::endl;
+        // Try the original path; it may have just happed to have a '=' in it.
+        if (access(parts[i].c_str(), F_OK) < 0) {
+          cerr << disk_path << ": warning: directory does not exist." << endl;
+        } else {
+          virtual_path = "";
+          disk_path = parts[i];
+        }
       }
 
       // Don't use make_pair as the old/default standard library on Solaris

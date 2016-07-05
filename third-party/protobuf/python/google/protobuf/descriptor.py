@@ -258,7 +258,7 @@ class Descriptor(_NestedDescriptorBase):
     def __new__(cls, name, full_name, filename, containing_type, fields,
                 nested_types, enum_types, extensions, options=None,
                 is_extendable=True, extension_ranges=None, oneofs=None,
-                file=None, serialized_start=None, serialized_end=None,
+                file=None, serialized_start=None, serialized_end=None,  # pylint: disable=redefined-builtin
                 syntax=None):
       _message.Message._CheckCalledFromGeneratedFile()
       return _message.default_pool.FindMessageTypeByName(full_name)
@@ -269,8 +269,8 @@ class Descriptor(_NestedDescriptorBase):
   def __init__(self, name, full_name, filename, containing_type, fields,
                nested_types, enum_types, extensions, options=None,
                is_extendable=True, extension_ranges=None, oneofs=None,
-               file=None, serialized_start=None, serialized_end=None,
-               syntax=None):  # pylint:disable=redefined-builtin
+               file=None, serialized_start=None, serialized_end=None,  # pylint: disable=redefined-builtin
+               syntax=None):
     """Arguments to __init__() are as described in the description
     of Descriptor fields above.
 
@@ -665,7 +665,7 @@ class EnumValueDescriptor(DescriptorBase):
     self.type = type
 
 
-class OneofDescriptor(object):
+class OneofDescriptor(DescriptorBase):
   """Descriptor for a oneof field.
 
     name: (str) Name of the oneof field.
@@ -682,12 +682,15 @@ class OneofDescriptor(object):
   if _USE_C_DESCRIPTORS:
     _C_DESCRIPTOR_CLASS = _message.OneofDescriptor
 
-    def __new__(cls, name, full_name, index, containing_type, fields):
+    def __new__(
+        cls, name, full_name, index, containing_type, fields, options=None):
       _message.Message._CheckCalledFromGeneratedFile()
       return _message.default_pool.FindOneofByName(full_name)
 
-  def __init__(self, name, full_name, index, containing_type, fields):
+  def __init__(
+      self, name, full_name, index, containing_type, fields, options=None):
     """Arguments are as described in the attribute description above."""
+    super(OneofDescriptor, self).__init__(options, 'OneofOptions')
     self.name = name
     self.full_name = full_name
     self.index = index
@@ -705,10 +708,21 @@ class ServiceDescriptor(_NestedDescriptorBase):
       definition appears withing the .proto file.
     methods: (list of MethodDescriptor) List of methods provided by this
       service.
+    methods_by_name: (dict str -> MethodDescriptor) Same MethodDescriptor
+      objects as in |methods_by_name|, but indexed by "name" attribute in each
+      MethodDescriptor.
     options: (descriptor_pb2.ServiceOptions) Service options message or
       None to use default service options.
     file: (FileDescriptor) Reference to file info.
   """
+
+  if _USE_C_DESCRIPTORS:
+    _C_DESCRIPTOR_CLASS = _message.ServiceDescriptor
+
+    def __new__(cls, name, full_name, index, methods, options=None, file=None,  # pylint: disable=redefined-builtin
+                serialized_start=None, serialized_end=None):
+      _message.Message._CheckCalledFromGeneratedFile()  # pylint: disable=protected-access
+      return _message.default_pool.FindServiceByName(full_name)
 
   def __init__(self, name, full_name, index, methods, options=None, file=None,
                serialized_start=None, serialized_end=None):
@@ -718,16 +732,14 @@ class ServiceDescriptor(_NestedDescriptorBase):
         serialized_end=serialized_end)
     self.index = index
     self.methods = methods
+    self.methods_by_name = dict((m.name, m) for m in methods)
     # Set the containing service for each method in this service.
     for method in self.methods:
       method.containing_service = self
 
   def FindMethodByName(self, name):
     """Searches for the specified method, and returns its descriptor."""
-    for method in self.methods:
-      if name == method.name:
-        return method
-    return None
+    return self.methods_by_name.get(name, None)
 
   def CopyToProto(self, proto):
     """Copies this to a descriptor_pb2.ServiceDescriptorProto.
@@ -753,6 +765,14 @@ class MethodDescriptor(DescriptorBase):
   options: (descriptor_pb2.MethodOptions) Method options message or
     None to use default method options.
   """
+
+  if _USE_C_DESCRIPTORS:
+    _C_DESCRIPTOR_CLASS = _message.MethodDescriptor
+
+    def __new__(cls, name, full_name, index, containing_service,
+                input_type, output_type, options=None):
+      _message.Message._CheckCalledFromGeneratedFile()  # pylint: disable=protected-access
+      return _message.default_pool.FindMethodByName(full_name)
 
   def __init__(self, name, full_name, index, containing_service,
                input_type, output_type, options=None):
@@ -783,9 +803,12 @@ class FileDescriptor(DescriptorBase):
   serialized_pb: (str) Byte string of serialized
     descriptor_pb2.FileDescriptorProto.
   dependencies: List of other FileDescriptors this FileDescriptor depends on.
+  public_dependencies: A list of FileDescriptors, subset of the dependencies
+    above, which were declared as "public".
   message_types_by_name: Dict of message names of their descriptors.
   enum_types_by_name: Dict of enum names and their descriptors.
   extensions_by_name: Dict of extension names and their descriptors.
+  services_by_name: Dict of services names and their descriptors.
   pool: the DescriptorPool this descriptor belongs to.  When not passed to the
     constructor, the global default pool is used.
   """
@@ -794,7 +817,8 @@ class FileDescriptor(DescriptorBase):
     _C_DESCRIPTOR_CLASS = _message.FileDescriptor
 
     def __new__(cls, name, package, options=None, serialized_pb=None,
-                dependencies=None, syntax=None, pool=None):
+                dependencies=None, public_dependencies=None,
+                syntax=None, pool=None):
       # FileDescriptor() is called from various places, not only from generated
       # files, to register dynamic proto files and messages.
       if serialized_pb:
@@ -805,7 +829,8 @@ class FileDescriptor(DescriptorBase):
         return super(FileDescriptor, cls).__new__(cls)
 
   def __init__(self, name, package, options=None, serialized_pb=None,
-               dependencies=None, syntax=None, pool=None):
+               dependencies=None, public_dependencies=None,
+               syntax=None, pool=None):
     """Constructor."""
     super(FileDescriptor, self).__init__(options, 'FileOptions')
 
@@ -821,7 +846,9 @@ class FileDescriptor(DescriptorBase):
 
     self.enum_types_by_name = {}
     self.extensions_by_name = {}
+    self.services_by_name = {}
     self.dependencies = (dependencies or [])
+    self.public_dependencies = (public_dependencies or [])
 
     if (api_implementation.Type() == 'cpp' and
         self.serialized_pb is not None):

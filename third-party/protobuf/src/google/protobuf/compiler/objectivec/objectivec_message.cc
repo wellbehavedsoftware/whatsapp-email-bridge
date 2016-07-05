@@ -246,6 +246,22 @@ void MessageGenerator::DetermineForwardDeclarations(set<string>* fwd_decls) {
   }
 }
 
+bool MessageGenerator::IncludesOneOfDefinition() const {
+  if (!oneof_generators_.empty()) {
+    return true;
+  }
+
+  for (vector<MessageGenerator*>::const_iterator iter =
+           nested_message_generators_.begin();
+       iter != nested_message_generators_.end(); ++iter) {
+    if ((*iter)->IncludesOneOfDefinition()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void MessageGenerator::GenerateEnumHeader(io::Printer* printer) {
   for (vector<EnumGenerator*>::iterator iter = enum_generators_.begin();
        iter != enum_generators_.end(); ++iter) {
@@ -321,8 +337,9 @@ void MessageGenerator::GenerateMessageHeader(io::Printer* printer) {
   }
 
   printer->Print(
-      "$comments$@interface $classname$ : GPBMessage\n\n",
+      "$comments$$deprecated_attribute$@interface $classname$ : GPBMessage\n\n",
       "classname", class_name_,
+      "deprecated_attribute", GetOptionalDeprecatedAttribute(descriptor_, false, true),
       "comments", message_comments);
 
   vector<char> seen_oneofs(descriptor_->oneof_decl_count(), 0);

@@ -39,6 +39,7 @@ using Google.Protobuf.WellKnownTypes;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Google.Protobuf
 {
@@ -376,8 +377,16 @@ namespace Google.Protobuf
                     throw new ArgumentException("Invalid field type");
             }
         }
-        
-        private void WriteValue(TextWriter writer, object value)
+
+        /// <summary>
+        /// Writes a single value to the given writer as JSON. Only types understood by
+        /// Protocol Buffers can be written in this way. This method is only exposed for
+        /// advanced use cases; most users should be using <see cref="Format(IMessage)"/>
+        /// or <see cref="Format(IMessage, TextWriter)"/>.
+        /// </summary>
+        /// <param name="writer">The writer to write the value to. Must not be null.</param>
+        /// <param name="value">The value to write. May be null.</param>
+        public void WriteValue(TextWriter writer, object value)
         {
             if (value == null)
             {
@@ -420,9 +429,10 @@ namespace Google.Protobuf
             }
             else if (value is System.Enum)
             {
-                if (System.Enum.IsDefined(value.GetType(), value))
+                string name = OriginalEnumValueHelper.GetOriginalName(value);
+                if (name != null)
                 {
-                    WriteString(writer, value.ToString());
+                    WriteString(writer, name);
                 }
                 else
                 {
@@ -445,15 +455,7 @@ namespace Google.Protobuf
             }
             else if (value is IMessage)
             {
-                IMessage message = (IMessage) value;
-                if (message.Descriptor.IsWellKnownType)
-                {
-                    WriteWellKnownTypeValue(writer, message.Descriptor, value);
-                }
-                else
-                {
-                    WriteMessage(writer, (IMessage)value);
-                }
+                Format((IMessage)value, writer);
             }
             else
             {
@@ -565,7 +567,7 @@ namespace Google.Protobuf
 
             string typeUrl = (string) value.Descriptor.Fields[Any.TypeUrlFieldNumber].Accessor.GetValue(value);
             ByteString data = (ByteString) value.Descriptor.Fields[Any.ValueFieldNumber].Accessor.GetValue(value);
-            string typeName = GetTypeName(typeUrl);
+            string typeName = Any.GetTypeName(typeUrl);
             MessageDescriptor descriptor = settings.TypeRegistry.Find(typeName);
             if (descriptor == null)
             {
@@ -606,17 +608,7 @@ namespace Google.Protobuf
             writer.Write(data.ToBase64());
             writer.Write('"');
             writer.Write(" }");
-        }
-
-        internal static string GetTypeName(String typeUrl)
-        {
-            string[] parts = typeUrl.Split('/');
-            if (parts.Length != 2 || parts[0] != TypeUrlPrefix)
-            {
-                throw new InvalidProtocolBufferException($"Invalid type url: {typeUrl}");
-            }
-            return parts[1];
-        }
+        }        
 
         private void WriteStruct(TextWriter writer, IMessage message)
         {
@@ -729,20 +721,6 @@ namespace Google.Protobuf
                 first = false;
             }
             writer.Write(first ? "}" : " }");
-        }
-
-        /// <summary>
-        /// Returns whether or not a singular value can be represented in JSON.
-        /// Currently only relevant for enums, where unknown values can't be represented.
-        /// For repeated/map fields, this always returns true.
-        /// </summary>
-        private bool CanWriteSingleValue(object value)
-        {
-            if (value is System.Enum)
-            {
-                return System.Enum.IsDefined(value.GetType(), value);
-            }
-            return true;
         }
 
         /// <summary>
@@ -876,6 +854,56 @@ namespace Google.Protobuf
                 FormatDefaultValues = formatDefaultValues;
                 TypeRegistry = ProtoPreconditions.CheckNotNull(typeRegistry, nameof(typeRegistry));
             }
+        }
+
+        // Effectively a cache of mapping from enum values to the original name as specified in the proto file,
+        // fetched by reflection.
+        // The need for this is unfortunate, as is its unbounded size, but realistically it shouldn't cause issues.
+        private static class OriginalEnumValueHelper
+        {
+            // TODO: In the future we might want to use ConcurrentDictionary, at the point where all
+            // the platforms we target have it.
+            private static readonly Dictionary<System.Type, Dictionary<object, string>> dictionaries
+                = new Dictionary<System.Type, Dictionary<object, string>>();
+            
+            internal static string GetOriginalName(object value)
+            {
+                var enumType = value.GetType();
+                Dictionary<object, string> nameMapping;
+                lock (dictionaries)
+                {
+                    if (!dictionaries.TryGetValue(enumType, out nameMapping))
+                    {
+                        nameMapping = GetNameMapping(enumType);
+                        dictionaries[enumType] = nameMapping;
+                    }
+                }
+
+                string originalName;
+                // If this returns false, originalName will be null, which is what we want.
+                nameMapping.TryGetValue(value, out originalName);
+                return originalName;
+            }
+
+#if DOTNET35
+            // TODO: Consider adding functionality to TypeExtensions to avoid this difference.
+            private static Dictionary<object, string> GetNameMapping(System.Type enumType) =>
+                enumType.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)
+                    .ToDictionary(f => f.GetValue(null),
+                                  f => (f.GetCustomAttributes(typeof(OriginalNameAttribute), false)
+                                        .FirstOrDefault() as OriginalNameAttribute)
+                                        // If the attribute hasn't been applied, fall back to the name of the field.
+                                        ?.Name ?? f.Name);
+#else
+            private static Dictionary<object, string> GetNameMapping(System.Type enumType) =>
+                enumType.GetTypeInfo().DeclaredFields
+                    .Where(f => f.IsStatic)
+                    .ToDictionary(f => f.GetValue(null),
+                                  f => f.GetCustomAttributes<OriginalNameAttribute>()
+                                        .FirstOrDefault()
+                                        // If the attribute hasn't been applied, fall back to the name of the field.
+                                        ?.Name ?? f.Name);
+#endif
         }
     }
 }

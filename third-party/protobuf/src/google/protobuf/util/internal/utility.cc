@@ -52,7 +52,7 @@ const StringPiece SkipWhiteSpace(StringPiece str) {
   for (i = 0; i < str.size() && isspace(str[i]); ++i) {
   }
   GOOGLE_DCHECK(i == str.size() || !isspace(str[i]));
-  return StringPiece(str, i);
+  return str.substr(i);
 }
 }  // namespace
 
@@ -128,8 +128,12 @@ string GetStringFromAny(const google::protobuf::Any& any) {
 }
 
 const StringPiece GetTypeWithoutUrl(StringPiece type_url) {
-  size_t idx = type_url.rfind('/');
-  return type_url.substr(idx + 1);
+  if (type_url.size() > kTypeUrlSize && type_url[kTypeUrlSize] == '/') {
+    return type_url.substr(kTypeUrlSize + 1);
+  } else {
+    size_t idx = type_url.rfind('/');
+    return type_url.substr(idx + 1);
+  }
 }
 
 const string GetFullTypeWithUrl(StringPiece simple_type) {
@@ -222,6 +226,7 @@ string ToCamelCase(const StringPiece input) {
       if (!result.empty() && is_cap &&
           (!was_cap || (i + 1 < input.size() && ascii_islower(input[i + 1])))) {
         first_word = false;
+        result.push_back(input[i]);
       } else {
         result.push_back(ascii_tolower(input[i]));
         continue;
@@ -231,9 +236,13 @@ string ToCamelCase(const StringPiece input) {
       if (ascii_islower(input[i])) {
         result.push_back(ascii_toupper(input[i]));
         continue;
+      } else {
+        result.push_back(input[i]);
+        continue;
       }
+    } else {
+      result.push_back(ascii_tolower(input[i]));
     }
-    result.push_back(input[i]);
   }
   return result;
 }

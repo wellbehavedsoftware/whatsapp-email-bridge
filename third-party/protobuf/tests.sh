@@ -36,6 +36,9 @@ build_cpp() {
   internal_build_cpp
   make check -j2
   cd conformance && make test_cpp && cd ..
+
+  # Verify benchmarking code can build successfully.
+  cd benchmarks && make && ./generate-datasets && cd ..
 }
 
 build_cpp_distcheck() {
@@ -194,59 +197,41 @@ internal_install_python_deps() {
   fi
 }
 
-internal_objectivec_common () {
-  # Make sure xctool is up to date. Adapted from
-  #  http://docs.travis-ci.com/user/osx-ci-environment/
-  # We don't use a before_install because we test multiple OSes.
-  brew update
-  brew outdated xctool || brew upgrade xctool
-  # Reused the build script that takes care of configuring and ensuring things
-  # are up to date. Xcode and conformance tests will be directly invoked.
-  objectivec/DevTools/full_mac_build.sh \
-      --core-only --skip-xcode --skip-objc-conformance
-}
-
-internal_xctool_debug_and_release() {
-  # Always use -reporter plain to avoid escape codes in output (makes travis
-  # logs easier to read).
-  xctool -reporter plain -configuration Debug "$@"
-  xctool -reporter plain -configuration Release "$@"
-}
-
 build_objectivec_ios() {
-  internal_objectivec_common
-  # https://github.com/facebook/xctool/issues/509 - unlike xcodebuild, xctool
-  # doesn't support >1 destination, so we have to build first and then run the
-  # tests one destination at a time.
-  internal_xctool_debug_and_release \
-    -project objectivec/ProtocolBuffers_iOS.xcodeproj \
-    -scheme ProtocolBuffers \
-    -sdk iphonesimulator \
-    build-tests
-  IOS_DESTINATIONS=(
-    "platform=iOS Simulator,name=iPhone 4s,OS=8.1" # 32bit
-    "platform=iOS Simulator,name=iPhone 6,OS=9.2" # 64bit
-    "platform=iOS Simulator,name=iPad 2,OS=8.1" # 32bit
-    "platform=iOS Simulator,name=iPad Air,OS=9.2" # 64bit
-  )
-  for i in "${IOS_DESTINATIONS[@]}" ; do
-    internal_xctool_debug_and_release \
-      -project objectivec/ProtocolBuffers_iOS.xcodeproj \
-      -scheme ProtocolBuffers \
-      -sdk iphonesimulator \
-      -destination "${i}" \
-      run-tests
-  done
+  # Reused the build script that takes care of configuring and ensuring things
+  # are up to date.  The OS X test runs the objc conformance test, so skip it
+  # here.
+  # Note: travis has xctool installed, and we've looked at using it in the past
+  # but it has ended up proving unreliable (bugs), an they are removing build
+  # support in favor of xcbuild (or just xcodebuild).
+  objectivec/DevTools/full_mac_build.sh \
+      --core-only --skip-xcode-osx --skip-objc-conformance "$@"
+}
+
+build_objectivec_ios_debug() {
+  build_objectivec_ios --skip-xcode-release
+}
+
+build_objectivec_ios_release() {
+  build_objectivec_ios --skip-xcode-debug
 }
 
 build_objectivec_osx() {
-  internal_objectivec_common
-  internal_xctool_debug_and_release \
-    -project objectivec/ProtocolBuffers_OSX.xcodeproj \
-    -scheme ProtocolBuffers \
-    -destination "platform=OS X,arch=x86_64" \
-    test
-  cd conformance && make test_objc && cd ..
+  # Reused the build script that takes care of configuring and ensuring things
+  # are up to date.
+  objectivec/DevTools/full_mac_build.sh \
+      --core-only --skip-xcode-ios
+}
+
+build_objectivec_cocoapods_integration() {
+  # First, load the RVM environment in bash, needed to update ruby.
+  source ~/.rvm/scripts/rvm
+  # Update ruby to 2.2.3 as the default one crashes with segmentation faults
+  # when using pod.
+  rvm use 2.2.3 --install --binary --fuzzy
+  # Update pod to the latest version.
+  gem install cocoapods --no-ri --no-rdoc
+  objectivec/Tests/CocoaPods/run_tests.sh
 }
 
 build_python() {
@@ -327,7 +312,10 @@ Usage: $0 { cpp |
             javanano_jdk7 |
             javanano_oracle7 |
             objectivec_ios |
+            objectivec_ios_debug |
+            objectivec_ios_release |
             objectivec_osx |
+            objectivec_cocoapods_integration |
             python |
             python_cpp |
             ruby19 |

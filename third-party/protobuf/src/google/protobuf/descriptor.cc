@@ -357,13 +357,20 @@ void DeleteAllowedProto3Extendee() {
 
 void InitAllowedProto3Extendee() {
   allowed_proto3_extendees_ = new set<string>;
-  allowed_proto3_extendees_->insert("google.protobuf.FileOptions");
-  allowed_proto3_extendees_->insert("google.protobuf.MessageOptions");
-  allowed_proto3_extendees_->insert("google.protobuf.FieldOptions");
-  allowed_proto3_extendees_->insert("google.protobuf.EnumOptions");
-  allowed_proto3_extendees_->insert("google.protobuf.EnumValueOptions");
-  allowed_proto3_extendees_->insert("google.protobuf.ServiceOptions");
-  allowed_proto3_extendees_->insert("google.protobuf.MethodOptions");
+  const char* kOptionNames[] = {
+      "FileOptions",      "MessageOptions", "FieldOptions", "EnumOptions",
+      "EnumValueOptions", "ServiceOptions", "MethodOptions"};
+  for (int i = 0; i < GOOGLE_ARRAYSIZE(kOptionNames); ++i) {
+    // descriptor.proto has a different package name in opensource. We allow
+    // both so the opensource protocol compiler can also compile internal
+    // proto3 files with custom options. See: b/27567912
+    allowed_proto3_extendees_->insert(string("google.protobuf.") +
+                                      kOptionNames[i]);
+    // Split the word to trick the opensource processing scripts so they
+    // will keep the origial package name.
+    allowed_proto3_extendees_->insert(string("proto") + "2." + kOptionNames[i]);
+  }
+
   google::protobuf::internal::OnShutdown(&DeleteAllowedProto3Extendee);
 }
 
@@ -1889,6 +1896,9 @@ void FieldDescriptor::CopyJsonNameTo(FieldDescriptorProto* proto) const {
 
 void OneofDescriptor::CopyTo(OneofDescriptorProto* proto) const {
   proto->set_name(name());
+  if (&options() != &OneofOptions::default_instance()) {
+    proto->mutable_options()->CopyFrom(options());
+  }
 }
 
 void EnumDescriptor::CopyTo(EnumDescriptorProto* proto) const {
@@ -2428,6 +2438,9 @@ void OneofDescriptor::DebugString(int depth, string* contents,
   comment_printer.AddPreComment(contents);
   strings::SubstituteAndAppend(
       contents, "$0 oneof $1 {", prefix, name());
+
+  FormatLineOptions(depth, options(), contents);
+
   if (debug_string_options.elide_oneof_body) {
     contents->append(" ... }\n");
   } else {
@@ -2765,6 +2778,9 @@ class DescriptorBuilder {
 
  private:
   friend class OptionInterpreter;
+
+  // Non-recursive part of BuildFile functionality.
+  const FileDescriptor* BuildFileImpl(const FileDescriptorProto& proto);
 
   const DescriptorPool* pool_;
   DescriptorPool::Tables* tables_;  // for convenience
@@ -3834,7 +3850,11 @@ const FileDescriptor* DescriptorBuilder::BuildFile(
     }
     tables_->pending_files_.pop_back();
   }
+  return BuildFileImpl(proto);
+}
 
+const FileDescriptor* DescriptorBuilder::BuildFileImpl(
+    const FileDescriptorProto& proto) {
   // Checkpoint the tables so that we can roll back if something goes wrong.
   tables_->AddCheckpoint();
 
@@ -4509,6 +4529,13 @@ void DescriptorBuilder::BuildOneof(const OneofDescriptorProto& proto,
   result->field_count_ = 0;
   result->fields_ = NULL;
 
+  // Copy options.
+  if (!proto.has_options()) {
+    result->options_ = NULL;  // Will set to default_instance later.
+  } else {
+    AllocateOptions(proto.options(), result);
+  }
+
   AddSymbol(result->full_name(), parent, result->name(),
             proto, Symbol(result));
 }
@@ -4769,6 +4796,10 @@ void DescriptorBuilder::CrossLinkMessage(
     oneof_decl->fields_ =
       tables_->AllocateArray<const FieldDescriptor*>(oneof_decl->field_count_);
     oneof_decl->field_count_ = 0;
+
+    if (oneof_decl->options_ == NULL) {
+      oneof_decl->options_ = &OneofOptions::default_instance();
+    }
   }
 
   // Then fill them in.
@@ -5113,11 +5144,6 @@ void DescriptorBuilder::ValidateProto3(
   for (int i = 0; i < file->enum_type_count(); ++i) {
     ValidateProto3Enum(file->enum_types_ + i, proto.enum_type(i));
   }
-  if (IsLite(file)) {
-    AddError(file->name(), proto,
-             DescriptorPool::ErrorCollector::OTHER,
-             "Lite runtime is not supported in proto3.");
-  }
 }
 
 static string ToLowercaseWithoutUnderscores(const string& name) {
@@ -5172,7 +5198,7 @@ void DescriptorBuilder::ValidateProto3Message(
     if (name_to_field.find(lowercase_name) != name_to_field.end()) {
       AddError(message->full_name(), proto,
                DescriptorPool::ErrorCollector::OTHER,
-               "The JSON camcel-case name of field \"" +
+               "The JSON camel-case name of field \"" +
                message->field(i)->name() + "\" conflicts with field \"" +
                name_to_field[lowercase_name]->name() + "\". This is not " +
                "allowed in proto3.");
@@ -5228,6 +5254,7 @@ void DescriptorBuilder::ValidateProto3Enum(
   }
 }
 
+
 void DescriptorBuilder::ValidateMessageOptions(Descriptor* message,
                                                const DescriptorProto& proto) {
   VALIDATE_OPTIONS_FROM_ARRAY(message, field, Field);
@@ -5248,6 +5275,7 @@ void DescriptorBuilder::ValidateMessageOptions(Descriptor* message,
                               max_extension_range));
     }
   }
+
 }
 
 void DescriptorBuilder::ValidateFieldOptions(FieldDescriptor* field,

@@ -123,6 +123,7 @@ typedef NS_ENUM(uint8_t, GPBFieldType) {
 - (BOOL)getValue:(nullable int32_t *)outValue forEnumName:(NSString *)name;
 
 - (nullable NSString *)textFormatNameForValue:(int32_t)number;
+- (BOOL)getValue:(nullable int32_t *)outValue forEnumTextFormatName:(NSString *)textFormatName;
 
 @end
 
@@ -135,7 +136,7 @@ typedef NS_ENUM(uint8_t, GPBFieldType) {
 @property(nonatomic, readonly, assign) Class msgClass;
 @property(nonatomic, readonly) NSString *singletonName;
 @property(nonatomic, readonly, strong, nullable) GPBEnumDescriptor *enumDescriptor;
-@property(nonatomic, readonly) id defaultValue;
+@property(nonatomic, readonly, nullable) id defaultValue;
 @end
 
 NS_ASSUME_NONNULL_END
