@@ -7,6 +7,7 @@ import re
 
 from gitdb.util import hex_to_bin
 
+from .compat import binary_type
 from .objects.blob import Blob
 from .objects.util import mode_str_to_int
 
@@ -15,8 +16,41 @@ from git.compat import (
     PY3
 )
 
+__all__ = ('Diffable', 'DiffIndex', 'Diff', 'NULL_TREE')
 
-__all__ = ('Diffable', 'DiffIndex', 'Diff')
+# Special object to compare against the empty tree in diffs
+NULL_TREE = object()
+
+_octal_byte_re = re.compile(b'\\\\([0-9]{3})')
+
+
+def _octal_repl(matchobj):
+    value = matchobj.group(1)
+    value = int(value, 8)
+    if PY3:
+        value = bytes(bytearray((value,)))
+    else:
+        value = chr(value)
+    return value
+
+
+def decode_path(path, has_ab_prefix=True):
+    if path == b'/dev/null':
+        return None
+
+    if path.startswith(b'"') and path.endswith(b'"'):
+        path = (path[1:-1].replace(b'\\n', b'\n')
+                          .replace(b'\\t', b'\t')
+                          .replace(b'\\"', b'"')
+                          .replace(b'\\\\', b'\\'))
+
+    path = _octal_byte_re.sub(_octal_repl, path)
+
+    if has_ab_prefix:
+        assert path.startswith(b'a/') or path.startswith(b'b/')
+        path = path[2:]
+
+    return path
 
 
 class Diffable(object):
@@ -49,6 +83,7 @@ class Diffable(object):
             If None, we will be compared to the working tree.
             If Treeish, it will be compared against the respective tree
             If Index ( type ), it will be compared against the index.
+            If git.NULL_TREE, it will compare against the empty tree.
             It defaults to Index to assure the method will not by-default fail
             on bare repositories.
 
@@ -87,10 +122,17 @@ class Diffable(object):
         if paths is not None and not isinstance(paths, (tuple, list)):
             paths = [paths]
 
-        if other is not None and other is not self.Index:
-            args.insert(0, other)
+        diff_cmd = self.repo.git.diff
         if other is self.Index:
-            args.insert(0, "--cached")
+            args.insert(0, '--cached')
+        elif other is NULL_TREE:
+            args.insert(0, '-r')  # recursive diff-tree
+            args.insert(0, '--root')
+            diff_cmd = self.repo.git.diff_tree
+        elif other is not None:
+            args.insert(0, '-r')  # recursive diff-tree
+            args.insert(0, other)
+            diff_cmd = self.repo.git.diff_tree
 
         args.insert(0, self)
 
@@ -101,7 +143,7 @@ class Diffable(object):
         # END paths handling
 
         kwargs['as_process'] = True
-        proc = self.repo.git.diff(*self._process_diff_args(args), **kwargs)
+        proc = diff_cmd(*self._process_diff_args(args), **kwargs)
 
         diff_method = Diff._index_from_raw_format
         if create_patch:
@@ -185,58 +227,63 @@ class Diff(object):
         be different to the version in the index or tree, and hence has been modified."""
 
     # precompiled regex
-    re_header = re.compile(r"""
+    re_header = re.compile(br"""
                                 ^diff[ ]--git
-                                    [ ](?:a/)?(?P<a_path>.+?)[ ](?:b/)?(?P<b_path>.+?)\n
-                                (?:^similarity[ ]index[ ](?P<similarity_index>\d+)%\n
-                                   ^rename[ ]from[ ](?P<rename_from>\S+)\n
-                                   ^rename[ ]to[ ](?P<rename_to>\S+)(?:\n|$))?
+                                    [ ](?P<a_path_fallback>"?a/.+?"?)[ ](?P<b_path_fallback>"?b/.+?"?)\n
                                 (?:^old[ ]mode[ ](?P<old_mode>\d+)\n
                                    ^new[ ]mode[ ](?P<new_mode>\d+)(?:\n|$))?
+                                (?:^similarity[ ]index[ ]\d+%\n
+                                   ^rename[ ]from[ ](?P<rename_from>.*)\n
+                                   ^rename[ ]to[ ](?P<rename_to>.*)(?:\n|$))?
                                 (?:^new[ ]file[ ]mode[ ](?P<new_file_mode>.+)(?:\n|$))?
                                 (?:^deleted[ ]file[ ]mode[ ](?P<deleted_file_mode>.+)(?:\n|$))?
                                 (?:^index[ ](?P<a_blob_id>[0-9A-Fa-f]+)
                                     \.\.(?P<b_blob_id>[0-9A-Fa-f]+)[ ]?(?P<b_mode>.+)?(?:\n|$))?
-                            """.encode('ascii'), re.VERBOSE | re.MULTILINE)
+                                (?:^---[ ](?P<a_path>[^\t\n\r\f\v]*)[\t\r\f\v]*(?:\n|$))?
+                                (?:^\+\+\+[ ](?P<b_path>[^\t\n\r\f\v]*)[\t\r\f\v]*(?:\n|$))?
+                            """, re.VERBOSE | re.MULTILINE)
     # can be used for comparisons
     NULL_HEX_SHA = "0" * 40
     NULL_BIN_SHA = b"\0" * 20
 
-    __slots__ = ("a_blob", "b_blob", "a_mode", "b_mode", "a_path", "b_path",
-                 "new_file", "deleted_file", "rename_from", "rename_to", "diff")
+    __slots__ = ("a_blob", "b_blob", "a_mode", "b_mode", "a_rawpath", "b_rawpath",
+                 "new_file", "deleted_file", "raw_rename_from", "raw_rename_to", "diff")
 
-    def __init__(self, repo, a_path, b_path, a_blob_id, b_blob_id, a_mode,
-                 b_mode, new_file, deleted_file, rename_from,
-                 rename_to, diff):
+    def __init__(self, repo, a_rawpath, b_rawpath, a_blob_id, b_blob_id, a_mode,
+                 b_mode, new_file, deleted_file, raw_rename_from,
+                 raw_rename_to, diff):
 
         self.a_mode = a_mode
         self.b_mode = b_mode
 
-        self.a_path = a_path
-        self.b_path = b_path
+        assert a_rawpath is None or isinstance(a_rawpath, binary_type)
+        assert b_rawpath is None or isinstance(b_rawpath, binary_type)
+        self.a_rawpath = a_rawpath
+        self.b_rawpath = b_rawpath
 
         if self.a_mode:
             self.a_mode = mode_str_to_int(self.a_mode)
         if self.b_mode:
             self.b_mode = mode_str_to_int(self.b_mode)
 
-        if a_blob_id is None:
+        if a_blob_id is None or a_blob_id == self.NULL_HEX_SHA:
             self.a_blob = None
         else:
-            assert self.a_mode is not None
-            self.a_blob = Blob(repo, hex_to_bin(a_blob_id), mode=self.a_mode, path=a_path)
-        if b_blob_id is None:
+            self.a_blob = Blob(repo, hex_to_bin(a_blob_id), mode=self.a_mode, path=self.a_path)
+
+        if b_blob_id is None or b_blob_id == self.NULL_HEX_SHA:
             self.b_blob = None
         else:
-            assert self.b_mode is not None
-            self.b_blob = Blob(repo, hex_to_bin(b_blob_id), mode=self.b_mode, path=b_path)
+            self.b_blob = Blob(repo, hex_to_bin(b_blob_id), mode=self.b_mode, path=self.b_path)
 
         self.new_file = new_file
         self.deleted_file = deleted_file
 
         # be clear and use None instead of empty strings
-        self.rename_from = rename_from or None
-        self.rename_to = rename_to or None
+        assert raw_rename_from is None or isinstance(raw_rename_from, binary_type)
+        assert raw_rename_to is None or isinstance(raw_rename_to, binary_type)
+        self.raw_rename_from = raw_rename_from or None
+        self.raw_rename_to = raw_rename_to or None
 
         self.diff = diff
 
@@ -303,9 +350,47 @@ class Diff(object):
         return res
 
     @property
+    def a_path(self):
+        return self.a_rawpath.decode(defenc, 'replace') if self.a_rawpath else None
+
+    @property
+    def b_path(self):
+        return self.b_rawpath.decode(defenc, 'replace') if self.b_rawpath else None
+
+    @property
+    def rename_from(self):
+        return self.raw_rename_from.decode(defenc, 'replace') if self.raw_rename_from else None
+
+    @property
+    def rename_to(self):
+        return self.raw_rename_to.decode(defenc, 'replace') if self.raw_rename_to else None
+
+    @property
     def renamed(self):
-        """:returns: True if the blob of our diff has been renamed"""
+        """:returns: True if the blob of our diff has been renamed
+        :note: This property is deprecated, please use ``renamed_file`` instead.
+        """
+        return self.renamed_file
+
+    @property
+    def renamed_file(self):
+        """:returns: True if the blob of our diff has been renamed
+        :note: This property is deprecated, please use ``renamed_file`` instead.
+        """
         return self.rename_from != self.rename_to
+
+    @classmethod
+    def _pick_best_path(cls, path_match, rename_match, path_fallback_match):
+        if path_match:
+            return decode_path(path_match)
+
+        if rename_match:
+            return decode_path(rename_match, has_ab_prefix=False)
+
+        if path_fallback_match:
+            return decode_path(path_fallback_match)
+
+        return None
 
     @classmethod
     def _index_from_patch_format(cls, repo, stream):
@@ -318,10 +403,17 @@ class Diff(object):
         index = DiffIndex()
         previous_header = None
         for header in cls.re_header.finditer(text):
-            a_path, b_path, similarity_index, rename_from, rename_to, \
-                old_mode, new_mode, new_file_mode, deleted_file_mode, \
-                a_blob_id, b_blob_id, b_mode = header.groups()
+            a_path_fallback, b_path_fallback, \
+                old_mode, new_mode, \
+                rename_from, rename_to, \
+                new_file_mode, deleted_file_mode, \
+                a_blob_id, b_blob_id, b_mode, \
+                a_path, b_path = header.groups()
+
             new_file, deleted_file = bool(new_file_mode), bool(deleted_file_mode)
+
+            a_path = cls._pick_best_path(a_path, rename_from, a_path_fallback)
+            b_path = cls._pick_best_path(b_path, rename_to, b_path_fallback)
 
             # Our only means to find the actual text is to see what has not been matched by our regex,
             # and then retro-actively assin it to our index
@@ -334,15 +426,15 @@ class Diff(object):
             a_mode = old_mode or deleted_file_mode or (a_path and (b_mode or new_mode or new_file_mode))
             b_mode = b_mode or new_mode or new_file_mode or (b_path and a_mode)
             index.append(Diff(repo,
-                              a_path and a_path.decode(defenc),
-                              b_path and b_path.decode(defenc),
+                              a_path,
+                              b_path,
                               a_blob_id and a_blob_id.decode(defenc),
                               b_blob_id and b_blob_id.decode(defenc),
                               a_mode and a_mode.decode(defenc),
                               b_mode and b_mode.decode(defenc),
                               new_file, deleted_file,
-                              rename_from and rename_from.decode(defenc),
-                              rename_to and rename_to.decode(defenc),
+                              rename_from,
+                              rename_to,
                               None))
 
             previous_header = header
@@ -368,8 +460,8 @@ class Diff(object):
             meta, _, path = line[1:].partition('\t')
             old_mode, new_mode, a_blob_id, b_blob_id, change_type = meta.split(None, 4)
             path = path.strip()
-            a_path = path
-            b_path = path
+            a_path = path.encode(defenc)
+            b_path = path.encode(defenc)
             deleted_file = False
             new_file = False
             rename_from = None
@@ -385,6 +477,8 @@ class Diff(object):
                 new_file = True
             elif change_type[0] == 'R':     # parses RXXX, where XXX is a confidence value
                 a_path, b_path = path.split('\t', 1)
+                a_path = a_path.encode(defenc)
+                b_path = b_path.encode(defenc)
                 rename_from, rename_to = a_path, b_path
             # END add/remove handling
 

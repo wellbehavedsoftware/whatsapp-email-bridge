@@ -13,6 +13,7 @@ import threading
 import errno
 import mmap
 
+from git.odict import OrderedDict
 from contextlib import contextmanager
 import signal
 from subprocess import (
@@ -34,15 +35,18 @@ from .exc import (
 from git.compat import (
     string_types,
     defenc,
+    force_bytes,
     PY3,
     bchr,
     # just to satisfy flake8 on py3
-    unicode
+    unicode,
+    safe_decode,
 )
 
 execute_kwargs = ('istream', 'with_keep_cwd', 'with_extended_output',
                   'with_exceptions', 'as_process', 'stdout_as_string',
-                  'output_stream', 'with_stdout', 'kill_after_timeout')
+                  'output_stream', 'with_stdout', 'kill_after_timeout',
+                  'universal_newlines')
 
 log = logging.getLogger('git.cmd')
 log.addHandler(logging.NullHandler())
@@ -111,12 +115,7 @@ def handle_process_output(process, stdout_handler, stderr_handler, finalizer):
     def _dispatch_single_line(line, handler):
         line = line.decode(defenc)
         if line and handler:
-            try:
-                handler(line)
-            except Exception:
-                # Keep reading, have to pump the lines empty nontheless
-                log.error("Line handler exception on line: %s", line, exc_info=True)
-            # end
+            handler(line)
         # end dispatch helper
     # end single line helper
 
@@ -289,7 +288,7 @@ class Git(LazyMixin):
                 return
 
             # can be that nothing really exists anymore ...
-            if os is None:
+            if os is None or os.kill is None:
                 return
 
             # try to kill it
@@ -309,22 +308,27 @@ class Git(LazyMixin):
         def __getattr__(self, attr):
             return getattr(self.proc, attr)
 
-        def wait(self, stderr=None):
+        def wait(self, stderr=b''):
             """Wait for the process and return its status code.
 
             :param stderr: Previously read value of stderr, in case stderr is already closed.
             :warn: may deadlock if output or error pipes are used and not handled separately.
             :raise GitCommandError: if the return status is not 0"""
+            if stderr is None:
+                stderr = b''
+            stderr = force_bytes(stderr)
+            
             status = self.proc.wait()
 
             def read_all_from_possibly_closed_stream(stream):
                 try:
-                    return stream.read()
+                    return stderr + force_bytes(stream.read())
                 except ValueError:
-                    return stderr or ''
+                    return stderr or b''
 
             if status != 0:
                 errstr = read_all_from_possibly_closed_stream(self.proc.stderr)
+                log.debug('AutoInterrupt wait stderr: %r' % (errstr,))
                 raise GitCommandError(self.args, status, errstr)
             # END status handling
             return status
@@ -355,7 +359,7 @@ class Git(LazyMixin):
         def read(self, size=-1):
             bytes_left = self._size - self._nbr
             if bytes_left == 0:
-                return ''
+                return b''
             if size > -1:
                 # assure we don't try to read past our limit
                 size = min(bytes_left, size)
@@ -374,7 +378,7 @@ class Git(LazyMixin):
 
         def readline(self, size=-1):
             if self._nbr == self._size:
-                return ''
+                return b''
 
             # clamp size to lowest allowed value
             bytes_left = self._size - self._nbr
@@ -490,6 +494,7 @@ class Git(LazyMixin):
                 stdout_as_string=True,
                 kill_after_timeout=None,
                 with_stdout=True,
+                universal_newlines=False,
                 **subprocess_kwargs
                 ):
         """Handles executing the command on the shell and consumes and returns
@@ -544,7 +549,9 @@ class Git(LazyMixin):
             specify may not be the same ones.
 
         :param with_stdout: If True, default True, we open stdout on the created process
-
+        :param universal_newlines:
+            if True, pipes will be opened as text, and lines are split at
+            all known line endings.
         :param kill_after_timeout:
             To specify a timeout in seconds for the git command, after which the process
             should be killed. This will have no effect if as_process is set to True. It is
@@ -608,9 +615,10 @@ class Git(LazyMixin):
                          bufsize=-1,
                          stdin=istream,
                          stderr=PIPE,
-                         stdout=with_stdout and PIPE or None,
+                         stdout=PIPE if with_stdout else open(os.devnull, 'wb'),
                          shell=self.USE_SHELL,
                          close_fds=(os.name == 'posix'),  # unsupported on windows
+                         universal_newlines=universal_newlines,
                          **subprocess_kwargs
                          )
         except cmd_not_found_exception as err:
@@ -686,12 +694,12 @@ class Git(LazyMixin):
             cmdstr = " ".join(command)
 
             def as_text(stdout_value):
-                return not output_stream and stdout_value.decode(defenc) or '<OUTPUT_STREAM>'
+                return not output_stream and safe_decode(stdout_value) or '<OUTPUT_STREAM>'
             # end
 
             if stderr_value:
                 log.info("%s -> %d; stdout: '%s'; stderr: '%s'",
-                         cmdstr, status, as_text(stdout_value), stderr_value.decode(defenc))
+                         cmdstr, status, as_text(stdout_value), safe_decode(stderr_value))
             elif stdout_value:
                 log.info("%s -> %d; stdout: '%s'", cmdstr, status, as_text(stdout_value))
             else:
@@ -705,11 +713,11 @@ class Git(LazyMixin):
                 raise GitCommandError(command, status, stderr_value)
 
         if isinstance(stdout_value, bytes) and stdout_as_string:  # could also be output_stream
-            stdout_value = stdout_value.decode(defenc)
+            stdout_value = safe_decode(stdout_value)
 
         # Allow access to the command's status code
         if with_extended_output:
-            return (status, stdout_value, stderr_value.decode(defenc))
+            return (status, stdout_value, safe_decode(stderr_value))
         else:
             return stdout_value
 
@@ -764,23 +772,32 @@ class Git(LazyMixin):
         finally:
             self.update_environment(**old_env)
 
+    def transform_kwarg(self, name, value, split_single_char_options):
+        if len(name) == 1:
+            if value is True:
+                return ["-%s" % name]
+            elif type(value) is not bool:
+                if split_single_char_options:
+                    return ["-%s" % name, "%s" % value]
+                else:
+                    return ["-%s%s" % (name, value)]
+        else:
+            if value is True:
+                return ["--%s" % dashify(name)]
+            elif type(value) is not bool:
+                return ["--%s=%s" % (dashify(name), value)]
+        return []
+
     def transform_kwargs(self, split_single_char_options=True, **kwargs):
         """Transforms Python style kwargs into git command line options."""
         args = list()
+        kwargs = OrderedDict(sorted(kwargs.items(), key=lambda x: x[0]))
         for k, v in kwargs.items():
-            if len(k) == 1:
-                if v is True:
-                    args.append("-%s" % k)
-                elif type(v) is not bool:
-                    if split_single_char_options:
-                        args.extend(["-%s" % k, "%s" % v])
-                    else:
-                        args.append("-%s%s" % (k, v))
+            if isinstance(v, (list, tuple)):
+                for value in v:
+                    args += self.transform_kwarg(k, value, split_single_char_options)
             else:
-                if v is True:
-                    args.append("--%s" % dashify(k))
-                elif type(v) is not bool:
-                    args.append("--%s=%s" % (dashify(k), v))
+                args += self.transform_kwarg(k, v, split_single_char_options)
         return args
 
     @classmethod

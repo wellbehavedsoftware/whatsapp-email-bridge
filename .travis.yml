@@ -4,7 +4,11 @@ python:
   - "2.7"
   - "3.3"
   - "3.4"
+  - "3.5"
   # - "pypy" - won't work as smmap doesn't work (see gitdb/.travis.yml for details)
+matrix:
+  allow_failures:
+    - python: "2.6"
 git:
   # a higher depth is needed for most of the tests - must be high enough to not actually be shallow
   # as we clone our own repository in the process
@@ -15,12 +19,7 @@ install:
   - pip install coveralls flake8 sphinx
 
   # generate some reflog as git-python tests need it (in master)
-  - git tag __testing_point__
-  - git checkout master
-  - git reset --hard HEAD~1
-  - git reset --hard HEAD~1
-  - git reset --hard HEAD~1
-  - git reset --hard __testing_point__
+  - ./init-tests-after-clone.sh
 
   # as commits are performed with the default user, it needs to be set for travis too
   - git config --global user.email "travis@ci.com"
