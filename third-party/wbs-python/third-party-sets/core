@@ -1,0 +1,28 @@
+---
+
+gitdb:
+
+  url: "git@github.com:gitpython-developers/gitdb.git"
+  version: "master"
+  python: "gitdb"
+  build: "python setup.py build"
+
+gitpython:
+
+  url: "git@github.com:gitpython-developers/GitPython.git"
+  version: "master"
+  python: "gitpython"
+
+smmap:
+
+  url: "git@github.com:gitpython-developers/smmap.git"
+  version: "master"
+  python: "smmap"
+
+wbs-python:
+
+  url: "git@gitlab.wellbehavedsoftware.com:well-behaved-software/wbs-python.git"
+  version: "master"
+  python: "wbs-python"
+
+# ex: et ts=2 filetype=yaml
