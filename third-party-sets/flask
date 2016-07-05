@@ -1,0 +1,44 @@
+---
+
+click:
+
+  url: "git@github.com:pallets/click.git"
+  version: "master"
+  build: "python setup.py build"
+
+flask:
+
+  url: "git@github.com:pallets/flask.git"
+  version: "master"
+  python: "flask/build/lib"
+  build: "python setup.py build"
+
+itsdangerous:
+
+  url: "git@github.com:pallets/itsdangerous.git"
+  version: "master"
+  python: "itsdangerous/build/lib"
+  build: "python setup.py build"
+
+jinja2:
+
+  url: "git@github.com:pallets/jinja.git"
+  version: "master"
+  python: "jinja2/build/lib"
+  build: "python setup.py build"
+
+markupsafe:
+
+  url: "git@github.com:pallets/markupsafe.git"
+  version: "master"
+  python: "markupsafe/build/lib.linux-x86_64-2.7"
+  build: "python setup.py build"
+
+werkzeug:
+
+  url: "git@github.com:pallets/werkzeug.git"
+  version: "master"
+  python: "werkzeug/build/lib"
+  build: "python setup.py build"
+
+# ex: et ts=2 filetype=yaml

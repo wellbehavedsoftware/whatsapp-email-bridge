@@ -12,3 +12,11 @@ body {
 	padding: 0;
 	min-height: 100%;
 }
+
+@media print {
+
+	html {
+		font-size: 8pt;
+	}
+
+}

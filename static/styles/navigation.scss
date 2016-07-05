@@ -55,3 +55,11 @@ nav a {
 	display: block;
 	padding: 0.5rem;
 }
+
+@media print {
+
+	.navigation-background, nav {
+		display: none;
+	}
+
+}

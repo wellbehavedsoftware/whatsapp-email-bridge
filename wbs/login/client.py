@@ -27,13 +27,13 @@ class LoginClient (object):
 
 	def before_request (self):
 
-		if "force_email" in self.settings:
+		if "force-email" in self.settings:
 
 			flask.g.user_email = (
-				self.settings ["force_email"])
+				self.settings ["force-email"])
 
 			flask.g.user_groups = (
-				self.settings ["force_groups"])
+				self.settings ["force-groups"])
 
 			flask.g.logout_url = None
 
