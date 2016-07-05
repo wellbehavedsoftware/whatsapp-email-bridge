@@ -9,7 +9,7 @@ AUTOMAKE_OPTIONS = foreign
 SUBDIRS = . src
 
 # Always include gmock in distributions.
-DIST_SUBDIRS = $(subdirs) src conformance
+DIST_SUBDIRS = $(subdirs) src conformance benchmarks
 
 # Build gmock before we build protobuf tests.  We don't add gmock to SUBDIRS
 # because then "make check" would also build and run all of gmock's own tests,
@@ -35,6 +35,10 @@ clean-local:
 	if test -e conformance/Makefile; then \
 	  echo "Making clean in conformance"; \
 	  cd conformance && $(MAKE) $(AM_MAKEFLAGS) clean; \
+	fi; \
+	if test -e benchmarks/Makefile; then \
+	  echo "Making clean in benchmarks"; \
+	  cd benchmarks && $(MAKE) $(AM_MAKEFLAGS) clean; \
 	fi; \
 	if test -e objectivec/DevTools; then \
 	  echo "Cleaning any ObjC pyc files"; \
@@ -154,6 +158,7 @@ csharp_EXTRA_DIST=                                                           \
   csharp/src/Google.Protobuf/Reflection/MethodDescriptor.cs                  \
   csharp/src/Google.Protobuf/Reflection/OneofAccessor.cs                     \
   csharp/src/Google.Protobuf/Reflection/OneofDescriptor.cs                   \
+  csharp/src/Google.Protobuf/Reflection/OriginalNameAttribute.cs             \
   csharp/src/Google.Protobuf/Reflection/PackageDescriptor.cs                 \
   csharp/src/Google.Protobuf/Reflection/PartialClasses.cs                    \
   csharp/src/Google.Protobuf/Reflection/ReflectionUtil.cs                    \
@@ -193,6 +198,8 @@ java_EXTRA_DIST=                                                                
   java/core/src/main/java/com/google/protobuf/BlockingRpcChannel.java              \
   java/core/src/main/java/com/google/protobuf/BlockingService.java                 \
   java/core/src/main/java/com/google/protobuf/BooleanArrayList.java                \
+  java/core/src/main/java/com/google/protobuf/ByteBufferWriter.java                \
+  java/core/src/main/java/com/google/protobuf/ByteOutput.java                      \
   java/core/src/main/java/com/google/protobuf/ByteString.java                      \
   java/core/src/main/java/com/google/protobuf/CodedInputStream.java                \
   java/core/src/main/java/com/google/protobuf/CodedOutputStream.java               \
@@ -202,6 +209,7 @@ java_EXTRA_DIST=                                                                
   java/core/src/main/java/com/google/protobuf/Extension.java                       \
   java/core/src/main/java/com/google/protobuf/ExtensionLite.java                   \
   java/core/src/main/java/com/google/protobuf/ExtensionRegistry.java               \
+  java/core/src/main/java/com/google/protobuf/ExtensionRegistryFactory.java        \
   java/core/src/main/java/com/google/protobuf/ExtensionRegistryLite.java           \
   java/core/src/main/java/com/google/protobuf/FieldSet.java                        \
   java/core/src/main/java/com/google/protobuf/FloatArrayList.java                  \
@@ -243,6 +251,8 @@ java_EXTRA_DIST=                                                                
   java/core/src/main/java/com/google/protobuf/SmallSortedMap.java                  \
   java/core/src/main/java/com/google/protobuf/TextFormat.java                      \
   java/core/src/main/java/com/google/protobuf/TextFormatEscaper.java               \
+  java/core/src/main/java/com/google/protobuf/TextFormatParseInfoTree.java         \
+  java/core/src/main/java/com/google/protobuf/TextFormatParseLocation.java         \
   java/core/src/main/java/com/google/protobuf/UninitializedMessageException.java   \
   java/core/src/main/java/com/google/protobuf/UnknownFieldSet.java                 \
   java/core/src/main/java/com/google/protobuf/UnknownFieldSetLite.java             \
@@ -254,6 +264,7 @@ java_EXTRA_DIST=                                                                
   java/core/src/test/java/com/google/protobuf/AnyTest.java                         \
   java/core/src/test/java/com/google/protobuf/BooleanArrayListTest.java            \
   java/core/src/test/java/com/google/protobuf/BoundedByteStringTest.java           \
+  java/core/src/test/java/com/google/protobuf/ByteBufferWriterTest.java            \
   java/core/src/test/java/com/google/protobuf/ByteStringTest.java                  \
   java/core/src/test/java/com/google/protobuf/CheckUtf8Test.java                   \
   java/core/src/test/java/com/google/protobuf/CodedInputStreamTest.java            \
@@ -262,6 +273,8 @@ java_EXTRA_DIST=                                                                
   java/core/src/test/java/com/google/protobuf/DescriptorsTest.java                 \
   java/core/src/test/java/com/google/protobuf/DoubleArrayListTest.java             \
   java/core/src/test/java/com/google/protobuf/DynamicMessageTest.java              \
+  java/core/src/test/java/com/google/protobuf/EnumTest.java                        \
+  java/core/src/test/java/com/google/protobuf/ExtensionRegistryFactoryTest.java    \
   java/core/src/test/java/com/google/protobuf/FieldPresenceTest.java               \
   java/core/src/test/java/com/google/protobuf/FloatArrayListTest.java              \
   java/core/src/test/java/com/google/protobuf/ForceFieldBuildersPreRun.java        \
@@ -294,6 +307,8 @@ java_EXTRA_DIST=                                                                
   java/core/src/test/java/com/google/protobuf/SmallSortedMapTest.java              \
   java/core/src/test/java/com/google/protobuf/TestBadIdentifiers.java              \
   java/core/src/test/java/com/google/protobuf/TestUtil.java                        \
+  java/core/src/test/java/com/google/protobuf/TextFormatParseInfoTreeTest.java     \
+  java/core/src/test/java/com/google/protobuf/TextFormatParseLocationTest.java     \
   java/core/src/test/java/com/google/protobuf/TextFormatTest.java                  \
   java/core/src/test/java/com/google/protobuf/UnknownEnumValueTest.java            \
   java/core/src/test/java/com/google/protobuf/UnknownFieldSetLiteTest.java         \
@@ -662,6 +677,7 @@ js_EXTRA_DIST=              \
   js/binary/constants.js    \
   js/binary/decoder.js      \
   js/binary/decoder_test.js \
+  js/binary/encoder.js      \
   js/binary/proto_test.js   \
   js/binary/reader.js       \
   js/binary/reader_test.js  \

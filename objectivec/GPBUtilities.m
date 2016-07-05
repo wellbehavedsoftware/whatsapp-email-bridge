@@ -39,6 +39,12 @@
 #import "GPBUnknownField.h"
 #import "GPBUnknownFieldSet.h"
 
+// Direct access is use for speed, to avoid even internally declaring things
+// read/write, etc. The warning is enabled in the project to ensure code calling
+// protos can turn on -Wdirect-ivar-access without issues.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdirect-ivar-access"
+
 static void AppendTextFormatForMessage(GPBMessage *message,
                                        NSMutableString *toStr,
                                        NSString *lineIndent);
@@ -889,21 +895,11 @@ void GPBSetMessageGroupField(GPBMessage *self,
 
 //%PDDM-EXPAND-END (4 expansions)
 
-// Only exists for public api, no core code should use this.
-id GPBGetMessageRepeatedField(GPBMessage *self, GPBFieldDescriptor *field) {
-#if DEBUG
-  if (field.fieldType != GPBFieldTypeRepeated) {
-    [NSException raise:NSInvalidArgumentException
-                format:@"%@.%@ is not a repeated field.",
-                       [self class], field.name];
-  }
-#endif
-  return GPBGetObjectIvarWithField(self, field);
-}
+// GPBGetMessageRepeatedField is defined in GPBMessage.m
 
 // Only exists for public api, no core code should use this.
 void GPBSetMessageRepeatedField(GPBMessage *self, GPBFieldDescriptor *field, id array) {
-#if DEBUG
+#if defined(DEBUG) && DEBUG
   if (field.fieldType != GPBFieldTypeRepeated) {
     [NSException raise:NSInvalidArgumentException
                 format:@"%@.%@ is not a repeated field.",
@@ -942,10 +938,10 @@ void GPBSetMessageRepeatedField(GPBMessage *self, GPBFieldDescriptor *field, id 
     case GPBDataTypeString:
     case GPBDataTypeMessage:
     case GPBDataTypeGroup:
-      expectedClass = [NSMutableDictionary class];
+      expectedClass = [NSMutableArray class];
       break;
     case GPBDataTypeEnum:
-      expectedClass = [GPBBoolArray class];
+      expectedClass = [GPBEnumArray class];
       break;
   }
   if (array && ![array isKindOfClass:expectedClass]) {
@@ -957,7 +953,7 @@ void GPBSetMessageRepeatedField(GPBMessage *self, GPBFieldDescriptor *field, id 
   GPBSetObjectIvarWithField(self, field, array);
 }
 
-#if DEBUG
+#if defined(DEBUG) && DEBUG
 static NSString *TypeToStr(GPBDataType dataType) {
   switch (dataType) {
     case GPBDataTypeBool:
@@ -991,22 +987,12 @@ static NSString *TypeToStr(GPBDataType dataType) {
 }
 #endif
 
-// Only exists for public api, no core code should use this.
-id GPBGetMessageMapField(GPBMessage *self, GPBFieldDescriptor *field) {
-#if DEBUG
-  if (field.fieldType != GPBFieldTypeMap) {
-    [NSException raise:NSInvalidArgumentException
-                format:@"%@.%@ is not a map<> field.",
-                       [self class], field.name];
-  }
-#endif
-  return GPBGetObjectIvarWithField(self, field);
-}
+// GPBGetMessageMapField is defined in GPBMessage.m
 
 // Only exists for public api, no core code should use this.
 void GPBSetMessageMapField(GPBMessage *self, GPBFieldDescriptor *field,
                            id dictionary) {
-#if DEBUG
+#if defined(DEBUG) && DEBUG
   if (field.fieldType != GPBFieldTypeMap) {
     [NSException raise:NSInvalidArgumentException
                 format:@"%@.%@ is not a map<> field.",
@@ -1133,6 +1119,8 @@ static void AppendTextFormatForMapMessageField(
       [toStr appendString:@"\n"];
 
       [toStr appendString:valueLine];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch-enum"
       switch (valueDataType) {
         case GPBDataTypeString:
           AppendStringEscaped(value, toStr);
@@ -1153,6 +1141,7 @@ static void AppendTextFormatForMapMessageField(
           NSCAssert(NO, @"Can't happen");
           break;
       }
+#pragma clang diagnostic pop
       [toStr appendString:@"\n"];
 
       [toStr appendString:msgEnd];
@@ -1174,6 +1163,8 @@ static void AppendTextFormatForMapMessageField(
       }
 
       [toStr appendString:valueLine];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch-enum"
       switch (valueDataType) {
         case GPBDataTypeString:
           AppendStringEscaped(valueObj, toStr);
@@ -1211,6 +1202,7 @@ static void AppendTextFormatForMapMessageField(
           [toStr appendString:valueObj];
           break;
       }
+#pragma clang diagnostic pop
       [toStr appendString:@"\n"];
 
       [toStr appendString:msgEnd];
@@ -1705,6 +1697,8 @@ NSString *GPBDecodeTextFormatName(const uint8_t *decodeData, int32_t key,
 
   return result;
 }
+
+#pragma clang diagnostic pop
 
 #pragma mark - GPBMessageSignatureProtocol
 

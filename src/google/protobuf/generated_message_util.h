@@ -42,8 +42,8 @@
 #include <string>
 
 #include <google/protobuf/stubs/once.h>
-
 #include <google/protobuf/stubs/common.h>
+
 namespace google {
 
 namespace protobuf {
@@ -62,6 +62,8 @@ namespace internal {
 // there.
 #undef DEPRECATED_PROTOBUF_FIELD
 #define PROTOBUF_DEPRECATED
+
+#define GOOGLE_PROTOBUF_DEPRECATED_ATTR
 
 
 // Constants for special floating point values.

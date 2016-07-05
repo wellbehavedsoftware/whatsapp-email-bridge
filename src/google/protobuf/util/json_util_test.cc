@@ -67,7 +67,7 @@ class JsonUtilTest : public testing::Test {
         kTypeUrlPrefix, DescriptorPool::generated_pool()));
   }
 
-  string ToJson(const Message& message, const JsonOptions& options) {
+  string ToJson(const Message& message, const JsonPrintOptions& options) {
     string result;
     GOOGLE_CHECK_OK(BinaryToJsonString(resolver_.get(),
                                 GetTypeUrl(message.GetDescriptor()),
@@ -75,10 +75,15 @@ class JsonUtilTest : public testing::Test {
     return result;
   }
 
-  bool FromJson(const string& json, Message* message) {
+  bool FromJson(const string& json, Message* message,
+                const JsonParseOptions& options) {
     string binary;
-    GOOGLE_CHECK_OK(JsonToBinaryString(
-        resolver_.get(), GetTypeUrl(message->GetDescriptor()), json, &binary));
+    if (!JsonToBinaryString(resolver_.get(),
+                            GetTypeUrl(message->GetDescriptor()), json, &binary,
+                            options)
+             .ok()) {
+      return false;
+    }
     return message->ParseFromString(binary);
   }
 
@@ -89,7 +94,7 @@ TEST_F(JsonUtilTest, TestWhitespaces) {
   TestMessage m;
   m.mutable_message_value();
 
-  JsonOptions options;
+  JsonPrintOptions options;
   EXPECT_EQ("{\"messageValue\":{}}", ToJson(m, options));
   options.add_whitespace = true;
   EXPECT_EQ(
@@ -99,28 +104,36 @@ TEST_F(JsonUtilTest, TestWhitespaces) {
       ToJson(m, options));
 }
 
-// TODO(skarvaje): Uncomment after cl/96232915 is submitted.
-// TEST_F(JsonUtilTest, TestDefaultValues) {
-  // TestMessage m;
-  // JsonOptions options;
-  // EXPECT_EQ("{}", ToJson(m, options));
-  // options.always_print_primitive_fields = true;
-  // EXPECT_EQ(
-      // "{\"boolValue\":false,"
-      // "\"int32Value\":0,"
-      // "\"int64Value\":\"0\","
-      // "\"uint32Value\":0,"
-      // "\"uint64Value\":\"0\","
-      // "\"floatValue\":0,"
-      // "\"doubleValue\":0,"
-      // "\"stringValue\":\"\","
-      // "\"bytesValue\":\"\","
-      // // TODO(xiaofeng): The default enum value should be FOO. I believe
-      // // this is a bug in DefaultValueObjectWriter.
-      // "\"enumValue\":null"
-      // "}",
-      // ToJson(m, options));
-// }
+TEST_F(JsonUtilTest, TestDefaultValues) {
+  TestMessage m;
+  JsonPrintOptions options;
+  EXPECT_EQ("{}", ToJson(m, options));
+  options.always_print_primitive_fields = true;
+  EXPECT_EQ(
+      "{\"boolValue\":false,"
+      "\"int32Value\":0,"
+      "\"int64Value\":\"0\","
+      "\"uint32Value\":0,"
+      "\"uint64Value\":\"0\","
+      "\"floatValue\":0,"
+      "\"doubleValue\":0,"
+      "\"stringValue\":\"\","
+      "\"bytesValue\":\"\","
+      "\"enumValue\":\"FOO\","
+      "\"repeatedBoolValue\":[],"
+      "\"repeatedInt32Value\":[],"
+      "\"repeatedInt64Value\":[],"
+      "\"repeatedUint32Value\":[],"
+      "\"repeatedUint64Value\":[],"
+      "\"repeatedFloatValue\":[],"
+      "\"repeatedDoubleValue\":[],"
+      "\"repeatedStringValue\":[],"
+      "\"repeatedBytesValue\":[],"
+      "\"repeatedEnumValue\":[],"
+      "\"repeatedMessageValue\":[]"
+      "}",
+      ToJson(m, options));
+}
 
 TEST_F(JsonUtilTest, ParseMessage) {
   // Some random message but good enough to verify that the parsing warpper
@@ -136,8 +149,9 @@ TEST_F(JsonUtilTest, ParseMessage) {
       "    {\"value\": 40}, {\"value\": 96}\n"
       "  ]\n"
       "}\n";
+  JsonParseOptions options;
   TestMessage m;
-  ASSERT_TRUE(FromJson(input, &m));
+  ASSERT_TRUE(FromJson(input, &m, options));
   EXPECT_EQ(1024, m.int32_value());
   ASSERT_EQ(2, m.repeated_int32_value_size());
   EXPECT_EQ(1, m.repeated_int32_value(0));
@@ -151,11 +165,28 @@ TEST_F(JsonUtilTest, ParseMessage) {
 TEST_F(JsonUtilTest, ParseMap) {
   TestMap message;
   (*message.mutable_string_map())["hello"] = 1234;
-  JsonOptions options;
-  EXPECT_EQ("{\"stringMap\":{\"hello\":1234}}", ToJson(message, options));
+  JsonPrintOptions print_options;
+  JsonParseOptions parse_options;
+  EXPECT_EQ("{\"stringMap\":{\"hello\":1234}}", ToJson(message, print_options));
   TestMap other;
-  ASSERT_TRUE(FromJson(ToJson(message, options), &other));
+  ASSERT_TRUE(FromJson(ToJson(message, print_options), &other, parse_options));
   EXPECT_EQ(message.DebugString(), other.DebugString());
+}
+
+TEST_F(JsonUtilTest, TestParseIgnoreUnknownFields) {
+  TestMessage m;
+  JsonParseOptions options;
+  options.ignore_unknown_fields = true;
+  EXPECT_TRUE(FromJson("{\"unknownName\":0}", &m, options));
+}
+
+TEST_F(JsonUtilTest, TestParseErrors) {
+  TestMessage m;
+  JsonParseOptions options;
+  // Parsing should fail if the field name can not be recognized.
+  EXPECT_FALSE(FromJson("{\"unknownName\":0}", &m, options));
+  // Parsing should fail if the value is invalid.
+  EXPECT_FALSE(FromJson("{\"int32Value\":2147483648}", &m, options));
 }
 
 typedef pair<char*, int> Segment;

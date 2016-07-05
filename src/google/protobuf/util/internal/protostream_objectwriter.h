@@ -74,10 +74,35 @@ class ObjectLocationTracker;
 // It also supports streaming.
 class LIBPROTOBUF_EXPORT ProtoStreamObjectWriter : public ProtoWriter {
  public:
+  // Options that control ProtoStreamObjectWriter class's behavior.
+  struct Options {
+    // Treats integer inputs in google.protobuf.Struct as strings. Normally,
+    // integer values are returned in double field "number_value" of
+    // google.protobuf.Struct. However, this can cause precision loss for
+    // int64/uint64 inputs. This option is provided for cases that want to
+    // preserve integer precision.
+    bool struct_integers_as_strings;
+
+    // Not treat unknown fields as an error. If there is an unknown fields,
+    // just ignore it and continue to process the rest.
+    bool ignore_unknown_fields;
+
+    Options()
+        : struct_integers_as_strings(false), ignore_unknown_fields(false) {}
+
+    // Default instance of Options with all options set to defaults.
+    static const Options& Defaults() {
+      static Options defaults;
+      return defaults;
+    }
+  };
+
 // Constructor. Does not take ownership of any parameter passed in.
   ProtoStreamObjectWriter(TypeResolver* type_resolver,
                           const google::protobuf::Type& type,
-                          strings::ByteSink* output, ErrorListener* listener);
+                          strings::ByteSink* output, ErrorListener* listener,
+                          const ProtoStreamObjectWriter::Options& options =
+                              ProtoStreamObjectWriter::Options::Defaults());
   virtual ~ProtoStreamObjectWriter();
 
   // ObjectWriter methods.
@@ -147,9 +172,14 @@ class LIBPROTOBUF_EXPORT ProtoStreamObjectWriter : public ProtoWriter {
     // The depth within the Any, so we can track when we're done.
     int depth_;
 
-    // True if the message type contained in Any has a special "value" message
-    // injected. This is true for well-known message types like Any or Struct.
-    bool has_injected_value_message_;
+    // True if the type is a well-known type. Well-known types in Any
+    // has a special formating:
+    // {
+    //   "@type": "type.googleapis.com/google.protobuf.XXX",
+    //   "value": <JSON representation of the type>,
+    // }
+    bool is_well_known_type_;
+    TypeRenderer* well_known_type_render_;
   };
 
   // Represents an item in a stack of items used to keep state between
@@ -206,7 +236,7 @@ class LIBPROTOBUF_EXPORT ProtoStreamObjectWriter : public ProtoWriter {
 
     // Set of map keys already seen for the type_. Used to validate incoming
     // messages so no map key appears more than once.
-    hash_set<string> map_keys_;
+    google::protobuf::scoped_ptr<hash_set<string> > map_keys_;
 
     // Conveys whether this Item is a placeholder or not. Placeholder items are
     // pushed to stack to account for special types.
@@ -224,19 +254,19 @@ class LIBPROTOBUF_EXPORT ProtoStreamObjectWriter : public ProtoWriter {
                           strings::ByteSink* output, ErrorListener* listener);
 
   // Returns true if the field is a map.
-  bool IsMap(const google::protobuf::Field& field);
+  inline bool IsMap(const google::protobuf::Field& field);
 
   // Returns true if the field is an any.
-  bool IsAny(const google::protobuf::Field& field);
+  inline bool IsAny(const google::protobuf::Field& field);
 
   // Returns true if the field is google.protobuf.Struct.
-  bool IsStruct(const google::protobuf::Field& field);
+  inline bool IsStruct(const google::protobuf::Field& field);
 
   // Returns true if the field is google.protobuf.Value.
-  bool IsStructValue(const google::protobuf::Field& field);
+  inline bool IsStructValue(const google::protobuf::Field& field);
 
   // Returns true if the field is google.protobuf.ListValue.
-  bool IsStructListValue(const google::protobuf::Field& field);
+  inline bool IsStructListValue(const google::protobuf::Field& field);
 
   // Renders google.protobuf.Value in struct.proto. It picks the right oneof
   // type based on value's type.
@@ -300,6 +330,9 @@ class LIBPROTOBUF_EXPORT ProtoStreamObjectWriter : public ProtoWriter {
 
   // The current element, variable for internal state processing.
   google::protobuf::scoped_ptr<Item> current_;
+
+  // Reference to the options that control this class's behavior.
+  const ProtoStreamObjectWriter::Options options_;
 
   GOOGLE_DISALLOW_IMPLICIT_CONSTRUCTORS(ProtoStreamObjectWriter);
 };
