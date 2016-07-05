@@ -6,11 +6,13 @@ It provides abstractions of git objects for easy access of repository data, and 
 
 The object database implementation is optimized for handling large quantities of objects and large datasets, which is achieved by using low-level structures and data streaming.
 
+
 ### REQUIREMENTS
 
 GitPython needs the `git` executable to be installed on the system and available in your `PATH` for most operations. If it is not in your `PATH`, you can help GitPython find it by setting the `GIT_PYTHON_GIT_EXECUTABLE=<path/to/git>` environment variable.
 
 * Git (1.7.x or newer)
+* Python 2.7 to 3.5, while python 2.6 is supported on a *best-effort basis*.
 
 The list of dependencies are listed in `./requirements.txt` and `./test-requirements.txt`. The installer takes care of installing them for you.
 
@@ -32,8 +34,18 @@ Both commands will install the required package dependencies.
 A distribution package can be obtained for manual installation at:
 
     http://pypi.python.org/pypi/GitPython
+    
+If you like to clone from source, you can do it like so:
+
+```bash
+git clone https://github.com/gitpython-developers/GitPython
+git submodule update --init --recursive
+./init-tests-after-clone.sh
+```
 
 ### RUNNING TESTS
+
+*Important*: Right after cloning this repository, please be sure to have executed the `init-tests-after-clone.sh` script in the repository root. Otherwise you will encounter test failures.
 
 The easiest way to run test is by using [tox](https://pypi.python.org/pypi/tox) a wrapper around virtualenv. It will take care of setting up environnements with the proper dependencies installed and execute test commands. To install it simply:
 
@@ -42,12 +54,13 @@ The easiest way to run test is by using [tox](https://pypi.python.org/pypi/tox) 
 Then run:
 
     tox
+    
+    
+For more fine-grained control, you can use `nose`.
 
-### SOURCE
+### Contributions
 
-GitPython's git repo is available on GitHub, which can be browsed at [github](https://github.com/gitpython-developers/GitPython) and cloned like that:
-
-    git clone https://github.com/gitpython-developers/GitPython
+Please have a look at the [contributions file][contributing].
 
 ### Live Coding
 
@@ -68,6 +81,17 @@ You can watch me fix issues or implement new features [live on Twitch][twitch-ch
     * The encountered stack-trace, if applicable
     * Enough information to allow reproducing the issue
 
+### How to make a new release
+
+* Update/verify the version in the `VERSION` file
+* Update/verify that the changelog has been updated
+* Commit everything
+* Run `git tag <version>` to tag the version in Git
+* Run `make release`
+* Finally, set the upcoming version in the `VERSION` file, usually be
+  incrementing the patch level, and possibly by appending `-dev`. Probably you
+  want to `git push` once more.
+  
 ### LICENSE
 
 New BSD License.  See the LICENSE file.
@@ -87,3 +111,4 @@ Now that there seems to be a massive user base, this should be motivation enough
 
 [twitch-channel]: http://www.twitch.tv/byronimo/profile
 [youtube-playlist]: https://www.youtube.com/playlist?list=PLMHbQxe1e9MnoEcLhn6Yhv5KAvpWkJbL0
+[contributing]: https://github.com/gitpython-developers/GitPython/blob/master/README.md

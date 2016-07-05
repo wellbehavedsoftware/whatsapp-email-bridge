@@ -2,6 +2,84 @@
 Changelog
 =========
 
+2.0.6 - Fixes and Features
+==========================
+
+* Fix: remote output parser now correctly matches refs with non-ASCII
+  chars in them
+* API: Diffs now have `a_rawpath`, `b_rawpath`, `raw_rename_from`,
+  `raw_rename_to` properties, which are the raw-bytes equivalents of their
+  unicode path counterparts.
+* Fix: TypeError about passing keyword argument to string decode() on
+  Python 2.6.
+* Feature: `setUrl API on Remotes <https://github.com/gitpython-developers/GitPython/pull/446#issuecomment-224670539>`_
+
+2.0.5 - Fixes
+=============
+
+* Fix: parser of fetch info lines choked on some legitimate lines
+
+2.0.4 - Fixes
+=============
+
+* Fix: parser of commit object data is now robust against cases where
+  commit object contains invalid bytes.  The invalid characters are now
+  replaced rather than choked on.
+* Fix: non-ASCII paths are now properly decoded and returned in
+  ``.diff()`` output
+* Fix: `RemoteProgress` will now strip the ', ' prefix or suffix from messages.
+* API: Remote.[fetch|push|pull](...) methods now allow the ``progress`` argument to
+  be a callable. This saves you from creating a custom type with usually just one
+  implemented method.
+
+2.0.3 - Fixes
+=============
+
+* Fix: bug in ``git-blame --incremental`` output parser that broken when
+  commit messages contained ``\r`` characters
+* Fix: progress handler exceptions are not caught anymore, which would usually just hide bugs
+  previously.
+* Fix: The `Git.execute` method will now redirect `stdout` to `devnull` if `with_stdout` is false, 
+  which is the intended behaviour based on the parameter's documentation.
+
+2.0.2 - Fixes
+=============
+
+* Fix: source package does not include \*.pyc files
+* Fix: source package does include doc sources
+
+2.0.1 - Fixes
+=============
+
+* Fix: remote output parser now correctly matches refs with "@" in them
+
+2.0.0 - Features
+================
+
+Please note that due to breaking changes, we have to increase the major version.
+
+* **IMPORTANT**: This release drops support for python 2.6, which is
+  officially deprecated by the python maintainers.
+* **CRITICAL**: `Diff` objects created with patch output will now not carry
+  the --- and +++ header lines anymore.  All diffs now start with the
+  @@ header line directly.  Users that rely on the old behaviour can now
+  (reliably) read this information from the a_path and b_path properties
+  without having to parse these lines manually.
+* `Commit` now has extra properties `authored_datetime` and
+  `committer_datetime` (to get Python datetime instances rather than
+  timestamps)
+* `Commit.diff()` now supports diffing the root commit via
+  `Commit.diff(NULL_TREE)`.
+* `Repo.blame()` now respects `incremental=True`, supporting incremental
+  blames.  Incremental blames are slightly faster since they don't include
+  the file's contents in them.
+* Fix: `Diff` objects created with patch output will now have their
+  `a_path` and `b_path` properties parsed out correctly.  Previously, some
+  values may have been populated incorrectly when a file was added or
+  deleted.
+* Fix: diff parsing issues with paths that contain "unsafe" chars, like
+  spaces, tabs, backslashes, etc.
+
 1.0.2 - Fixes
 =============
 

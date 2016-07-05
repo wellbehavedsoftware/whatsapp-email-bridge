@@ -1,4 +1,4 @@
-#-*-coding:utf-8-*-
+# -*- coding: utf-8 -*-
 # test_git.py
 # Copyright (C) 2008, 2009 Michael Trier (mtrier@gmail.com) and contributors
 #
@@ -69,6 +69,10 @@ class TestGit(TestBase):
 
         assert_equal(["--max-count"], self.git.transform_kwargs(**{'max_count': True}))
         assert_equal(["--max-count=5"], self.git.transform_kwargs(**{'max_count': 5}))
+
+        # Multiple args are supported by using lists/tuples
+        assert_equal(["-L", "1-3", "-L", "12-18"], self.git.transform_kwargs(**{'L': ('1-3', '12-18')}))
+        assert_equal(["-C", "-C"], self.git.transform_kwargs(**{'C': [True, True]}))
 
         # order is undefined
         res = self.git.transform_kwargs(**{'s': True, 't': True})
@@ -206,7 +210,6 @@ class TestGit(TestBase):
                         assert err.status == 128
                     else:
                         assert 'FOO' in str(err)
-                        assert err.status == 2
                 # end
             # end
         # end if select.poll exists

@@ -1,4 +1,4 @@
-#-*-coding:utf-8-*-
+# coding: utf-8
 # test_diff.py
 # Copyright (C) 2008, 2009 Michael Trier (mtrier@gmail.com) and contributors
 #
@@ -21,7 +21,8 @@ from git import (
     Repo,
     GitCommandError,
     Diff,
-    DiffIndex
+    DiffIndex,
+    NULL_TREE,
 )
 
 
@@ -75,7 +76,7 @@ class TestDiff(TestBase):
         self._assert_diff_format(diffs)
 
         assert_equal(1, len(diffs))
-        assert_equal(10, len(diffs[0].diff.splitlines()))
+        assert_equal(8, len(diffs[0].diff.splitlines()))
 
     def test_diff_with_rename(self):
         output = StringProcessAdapter(fixture('diff_rename'))
@@ -85,15 +86,19 @@ class TestDiff(TestBase):
         assert_equal(1, len(diffs))
 
         diff = diffs[0]
+        assert_true(diff.renamed_file)
         assert_true(diff.renamed)
         assert_equal(diff.rename_from, u'Jérôme')
         assert_equal(diff.rename_to, u'müller')
+        assert_equal(diff.raw_rename_from, b'J\xc3\xa9r\xc3\xb4me')
+        assert_equal(diff.raw_rename_to, b'm\xc3\xbcller')
         assert isinstance(str(diff), str)
 
         output = StringProcessAdapter(fixture('diff_rename_raw'))
         diffs = Diff._index_from_raw_format(self.rorepo, output.stdout)
         assert len(diffs) == 1
         diff = diffs[0]
+        assert diff.renamed_file
         assert diff.renamed
         assert diff.rename_from == 'this'
         assert diff.rename_to == 'that'
@@ -115,7 +120,7 @@ class TestDiff(TestBase):
         res = Diff._index_from_patch_format(None, output.stdout)
         assert len(res) == 6
         for dr in res:
-            assert dr.diff
+            assert dr.diff.startswith(b'@@')
             assert str(dr), "Diff to string conversion should be possible"
         # end for each diff
 
@@ -126,19 +131,70 @@ class TestDiff(TestBase):
         output = StringProcessAdapter(fixture('diff_index_raw'))
         res = Diff._index_from_raw_format(None, output.stdout)
         assert res[0].deleted_file
-        assert res[0].b_path == ''
+        assert res[0].b_path is None
+
+    def test_diff_initial_commit(self):
+        initial_commit = self.rorepo.commit('33ebe7acec14b25c5f84f35a664803fcab2f7781')
+
+        # Without creating a patch...
+        diff_index = initial_commit.diff(NULL_TREE)
+        assert diff_index[0].b_path == 'CHANGES'
+        assert diff_index[0].new_file
+        assert diff_index[0].diff == ''
+
+        # ...and with creating a patch
+        diff_index = initial_commit.diff(NULL_TREE, create_patch=True)
+        assert diff_index[0].a_path is None, repr(diff_index[0].a_path)
+        assert diff_index[0].b_path == 'CHANGES', repr(diff_index[0].b_path)
+        assert diff_index[0].new_file
+        assert diff_index[0].diff == fixture('diff_initial')
+
+    def test_diff_unsafe_paths(self):
+        output = StringProcessAdapter(fixture('diff_patch_unsafe_paths'))
+        res = Diff._index_from_patch_format(None, output.stdout)
+
+        # The "Additions"
+        self.assertEqual(res[0].b_path, u'path/ starting with a space')
+        self.assertEqual(res[1].b_path, u'path/"with-quotes"')
+        self.assertEqual(res[2].b_path, u"path/'with-single-quotes'")
+        self.assertEqual(res[3].b_path, u'path/ending in a space ')
+        self.assertEqual(res[4].b_path, u'path/with\ttab')
+        self.assertEqual(res[5].b_path, u'path/with\nnewline')
+        self.assertEqual(res[6].b_path, u'path/with spaces')
+        self.assertEqual(res[7].b_path, u'path/with-question-mark?')
+        self.assertEqual(res[8].b_path, u'path/¯\\_(ツ)_|¯')
+        self.assertEqual(res[9].b_path, u'path/💩.txt')
+        self.assertEqual(res[9].b_rawpath, b'path/\xf0\x9f\x92\xa9.txt')
+        self.assertEqual(res[10].b_path, u'path/�-invalid-unicode-path.txt')
+        self.assertEqual(res[10].b_rawpath, b'path/\x80-invalid-unicode-path.txt')
+
+        # The "Moves"
+        # NOTE: The path prefixes a/ and b/ here are legit!  We're actually
+        # verifying that it's not "a/a/" that shows up, see the fixture data.
+        self.assertEqual(res[11].a_path, u'a/with spaces')       # NOTE: path a/ here legit!
+        self.assertEqual(res[11].b_path, u'b/with some spaces')  # NOTE: path b/ here legit!
+        self.assertEqual(res[12].a_path, u'a/ending in a space ')
+        self.assertEqual(res[12].b_path, u'b/ending with space ')
+        self.assertEqual(res[13].a_path, u'a/"with-quotes"')
+        self.assertEqual(res[13].b_path, u'b/"with even more quotes"')
 
     def test_diff_patch_format(self):
         # test all of the 'old' format diffs for completness - it should at least
         # be able to deal with it
         fixtures = ("diff_2", "diff_2f", "diff_f", "diff_i", "diff_mode_only",
                     "diff_new_mode", "diff_numstat", "diff_p", "diff_rename",
-                    "diff_tree_numstat_root")
+                    "diff_tree_numstat_root", "diff_patch_unsafe_paths")
 
         for fixture_name in fixtures:
             diff_proc = StringProcessAdapter(fixture(fixture_name))
             Diff._index_from_patch_format(self.rorepo, diff_proc.stdout)
         # END for each fixture
+
+    def test_diff_with_spaces(self):
+        data = StringProcessAdapter(fixture('diff_file_with_spaces'))
+        diff_index = Diff._index_from_patch_format(self.rorepo, data.stdout)
+        assert diff_index[0].a_path is None, repr(diff_index[0].a_path)
+        assert diff_index[0].b_path == u'file with spaces', repr(diff_index[0].b_path)
 
     def test_diff_interface(self):
         # test a few variations of the main diff routine
@@ -149,7 +205,7 @@ class TestDiff(TestBase):
                 diff_item = commit.tree
             # END use tree every second item
 
-            for other in (None, commit.Index, commit.parents[0]):
+            for other in (None, NULL_TREE, commit.Index, commit.parents[0]):
                 for paths in (None, "CHANGES", ("CHANGES", "lib")):
                     for create_patch in range(2):
                         diff_index = diff_item.diff(other=other, paths=paths, create_patch=create_patch)

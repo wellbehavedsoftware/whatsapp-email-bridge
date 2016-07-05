@@ -1,4 +1,4 @@
-#-*-coding:utf-8-*-
+# -*- coding: utf-8 -*-
 # config.py
 # Copyright (C) 2008, 2009 Michael Trier (mtrier@gmail.com) and contributors
 #
@@ -33,7 +33,9 @@ if PY3:
         return bytes([n])
     def mviter(d):
         return d.values()
+    range = xrange
     unicode = str
+    binary_type = bytes
 else:
     FileType = file
     # usually, this is just ascii, which might not enough for our encoding needs
@@ -43,8 +45,19 @@ else:
     byte_ord = ord
     bchr = chr
     unicode = unicode
+    binary_type = str
+    range = xrange
     def mviter(d):
         return d.itervalues()
+
+
+def safe_decode(s):
+    """Safely decodes a binary string to unicode"""
+    if isinstance(s, unicode):
+        return s
+    elif isinstance(s, bytes):
+        return s.decode(defenc, 'replace')
+    raise TypeError('Expected bytes or text, but got %r' % (s,))
 
 
 def with_metaclass(meta, *bases):

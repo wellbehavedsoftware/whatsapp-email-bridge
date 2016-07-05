@@ -1,4 +1,4 @@
-#-*-coding:utf-8-*-
+# -*- coding: utf-8 -*-
 # test_repo.py
 # Copyright (C) 2008, 2009 Michael Trier (mtrier@gmail.com) and contributors
 #
@@ -48,6 +48,16 @@ import itertools
 from io import BytesIO
 
 from nose import SkipTest
+
+
+def iter_flatten(lol):
+    for items in lol:
+        for item in items:
+            yield item
+
+
+def flatten(lol):
+    return list(iter_flatten(lol))
 
 
 class TestRepo(TestBase):
@@ -324,6 +334,27 @@ class TestRepo(TestBase):
         assert nml, "There should at least be one blame commit that contains multiple lines"
 
     @patch.object(Git, '_call_process')
+    def test_blame_incremental(self, git):
+        git.return_value = fixture('blame_incremental')
+        blame_output = self.rorepo.blame_incremental('9debf6b0aafb6f7781ea9d1383c86939a1aacde3', 'AUTHORS')
+        blame_output = list(blame_output)
+        assert len(blame_output) == 5
+
+        # Check all outputted line numbers
+        ranges = flatten([entry.linenos for entry in blame_output])
+        assert ranges == flatten([range(2, 3), range(14, 15), range(1, 2), range(3, 14), range(15, 17)]), str(ranges)
+
+        commits = [entry.commit.hexsha[:7] for entry in blame_output]
+        assert commits == ['82b8902', '82b8902', 'c76852d', 'c76852d', 'c76852d'], str(commits)
+
+        # Original filenames
+        assert all([entry.orig_path == u'AUTHORS' for entry in blame_output])
+
+        # Original line numbers
+        orig_ranges = flatten([entry.orig_linenos for entry in blame_output])
+        assert orig_ranges == flatten([range(2, 3), range(14, 15), range(1, 2), range(2, 13), range(13, 15)]), str(orig_ranges)  # noqa
+
+    @patch.object(Git, '_call_process')
     def test_blame_complex_revision(self, git):
         git.return_value = fixture('blame_complex_revision')
         res = self.rorepo.blame("HEAD~10..HEAD", "README.md")
@@ -454,7 +485,7 @@ class TestRepo(TestBase):
         assert s.readline() == l1
         assert s.readline() == l2
         assert s.readline() == l3
-        assert s.readline() == ''
+        assert s.readline() == b''
         assert s._stream.tell() == len(d)
 
         # readline limit
@@ -465,13 +496,13 @@ class TestRepo(TestBase):
         # readline on tiny section
         s = mktiny()
         assert s.readline() == l1p
-        assert s.readline() == ''
+        assert s.readline() == b''
         assert s._stream.tell() == ts + 1
 
         # read no limit
         s = mkfull()
         assert s.read() == d[:-1]
-        assert s.read() == ''
+        assert s.read() == b''
         assert s._stream.tell() == len(d)
 
         # read limit

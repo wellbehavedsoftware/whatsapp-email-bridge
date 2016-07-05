@@ -39,7 +39,7 @@ from gitdb.util import (  # NOQA
 __all__ = ("stream_copy", "join_path", "to_native_path_windows", "to_native_path_linux",
            "join_path_native", "Stats", "IndexFileSHA1Writer", "Iterable", "IterableList",
            "BlockingLockFile", "LockFile", 'Actor', 'get_user_id', 'assure_directory_exists',
-           'RemoteProgress', 'rmtree', 'WaitGroup', 'unbare_repo')
+           'RemoteProgress', 'CallableRemoteProgress', 'rmtree', 'WaitGroup', 'unbare_repo')
 
 #{ Utility Methods
 
@@ -160,7 +160,6 @@ def finalize_process(proc, **kwargs):
 
 
 class RemoteProgress(object):
-
     """
     Handler providing an interface to parse progress information emitted by git-push
     and git-fetch and to dispatch callbacks allowing subclasses to react to the progress.
@@ -171,22 +170,38 @@ class RemoteProgress(object):
     STAGE_MASK = BEGIN | END
     OP_MASK = ~STAGE_MASK
 
-    __slots__ = ("_cur_line", "_seen_ops")
-    re_op_absolute = re.compile("(remote: )?([\w\s]+):\s+()(\d+)()(.*)")
-    re_op_relative = re.compile("(remote: )?([\w\s]+):\s+(\d+)% \((\d+)/(\d+)\)(.*)")
+    DONE_TOKEN = 'done.'
+    TOKEN_SEPARATOR = ', '
+
+    __slots__ = ("_cur_line", "_seen_ops", "_error_lines")
+    re_op_absolute = re.compile(r"(remote: )?([\w\s]+):\s+()(\d+)()(.*)")
+    re_op_relative = re.compile(r"(remote: )?([\w\s]+):\s+(\d+)% \((\d+)/(\d+)\)(.*)")
 
     def __init__(self):
         self._seen_ops = list()
+        self._cur_line = None
+        self._error_lines = []
+
+    def error_lines(self):
+        """Returns all lines that started with error: or fatal:"""
+        return self._error_lines
 
     def _parse_progress_line(self, line):
         """Parse progress information from the given line as retrieved by git-push
-        or git-fetch
+        or git-fetch.
+
+        Lines that seem to contain an error (i.e. start with error: or fatal:) are stored
+        separately and can be queried using `error_lines()`.
 
         :return: list(line, ...) list of lines that could not be processed"""
         # handle
         # Counting objects: 4, done.
         # Compressing objects:  50% (1/2)   \rCompressing objects: 100% (2/2)   \rCompressing objects: 100% (2/2), done.
         self._cur_line = line
+        if len(self._error_lines) > 0 or self._cur_line.startswith(('error:', 'fatal:')):
+            self._error_lines.append(self._cur_line)
+            return []
+
         sub_lines = line.split('\r')
         failed_lines = list()
         for sline in sub_lines:
@@ -257,11 +272,11 @@ class RemoteProgress(object):
             # END message handling
 
             message = message.strip()
-            done_token = ', done.'
-            if message.endswith(done_token):
+            if message.endswith(self.DONE_TOKEN):
                 op_code |= self.END
-                message = message[:-len(done_token)]
+                message = message[:-len(self.DONE_TOKEN)]
             # END end message handling
+            message = message.strip(self.TOKEN_SEPARATOR)
 
             self.update(op_code,
                         cur_count and float(cur_count),
@@ -309,10 +324,21 @@ class RemoteProgress(object):
 
         You may read the contents of the current line in self._cur_line"""
         pass
+        
+
+class CallableRemoteProgress(RemoteProgress):
+    """An implementation forwarding updates to any callable"""
+    __slots__ = ('_callable')
+    
+    def __init__(self, fn):
+        self._callable = fn
+        super(CallableRemoteProgress, self).__init__()
+
+    def update(self, *args, **kwargs):
+        self._callable(*args, **kwargs)
 
 
 class Actor(object):
-
     """Actors hold information about a person acting on the repository. They
     can be committers and authors or anything with a name and an email as
     mentioned in the git log entries."""
@@ -750,7 +776,7 @@ class WaitGroup(object):
             self.cv.notify_all()
         self.cv.release()
 
-    def wait(self):
+    def wait(self, stderr=b''):
         self.cv.acquire()
         while self.count > 0:
             self.cv.wait()
